@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-  <title>迪士尼倒树应急地图 (专业本地版)</title>
+  <title>迪士尼倒树应急地图 (Excel 协同版)</title>
   
   <!-- 1. 引入高德地图 JS API -->
   <script type="text/javascript">
@@ -14,6 +14,9 @@
   <!-- ⚠️ 确保 key 是你的高德 KEY -->
   <script type="text/javascript" src="https://webapi.amap.com/maps?v=2.0&key=ecc7bff9b574a80ad34e4d51bab69aca"></script>
   
+  <!-- 2. 引入前端解析 Excel 文件的轻量级库 -->
+  <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+
   <style>
     * { box-sizing: border-box; margin: 0; padding: 0; }
     html, body, #map-container { width: 100%; height: 100%; overflow: hidden; font-family: -apple-system, sans-serif; }
@@ -28,52 +31,47 @@
     /* 📊 统计看板样式 */
     .stats-panel {
       position: absolute; top: 80px; left: 10px; z-index: 999;
-      width: 260px; background: rgba(255, 255, 255, 0.95);
+      width: 280px; background: rgba(255, 255, 255, 0.95);
       border-radius: 8px; box-shadow: 0 2px 12px rgba(0,0,0,0.15);
       overflow: hidden; transition: all 0.3s ease;
     }
     .stats-header {
-      background: #1890ff; color: white; padding: 8px 12px;
+      background: #1890ff; color: white; padding: 10px 12px;
       font-size: 13px; font-weight: bold; display: flex;
       justify-content: space-between; align-items: center; cursor: pointer;
     }
-    .stats-content { padding: 10px; max-height: 300px; overflow-y: auto; font-size: 12px; }
+    .stats-content { padding: 10px; max-height: 280px; overflow-y: auto; font-size: 12px; }
     .stats-table { width: 100%; border-collapse: collapse; text-align: left; }
     .stats-table th, .stats-table td { padding: 6px 4px; border-bottom: 1px solid #eee; }
     .stats-table th { color: #666; font-weight: bold; }
     .stats-summary { margin-top: 8px; padding-top: 8px; border-top: 1px dashed #ccc; font-weight: bold; display: flex; justify-content: space-between; }
 
-    .action-panel {
-      position: absolute; bottom: 20px; left: 50%; transform: translateX(-50%); z-index: 999;
-      width: 90%; max-width: 400px; background: #ffffff; padding: 15px; border-radius: 12px;
-      box-shadow: 0 4px 20px rgba(0,0,0,0.2);
+    /* 📥 Excel 拖拽/上传面板 */
+    .upload-panel {
+      position: absolute; bottom: 20px; right: 10px; z-index: 999;
+      width: 320px; background: rgba(255, 255, 255, 0.95); padding: 15px; border-radius: 8px;
+      box-shadow: 0 4px 15px rgba(0,0,0,0.15); border: 2px dashed #1890ff;
+      text-align: center; transition: all 0.3s;
     }
-    .btn {
-      width: 100%; background: #1890ff; color: white; border: none; padding: 12px;
-      font-size: 16px; font-weight: bold; border-radius: 6px; cursor: pointer;
+    .upload-panel.dragover { background: #e6f7ff; border-color: #40a9ff; }
+    .upload-title { font-size: 13px; font-weight: bold; color: #1890ff; margin-bottom: 5px; }
+    .upload-tip { font-size: 11px; color: #666; margin-bottom: 10px; }
+    .file-input-btn {
+      display: inline-block; background: #1890ff; color: white; padding: 6px 12px;
+      font-size: 12px; border-radius: 4px; cursor: pointer; font-weight: bold;
     }
-    .btn:active { background: #096dd9; }
-    
-    .modal {
-      display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%;
-      background: rgba(0,0,0,0.5); z-index: 1000; align-items: center; justify-content: center;
-    }
-    .modal-content { background: white; padding: 20px; border-radius: 12px; width: 85%; max-width: 340px; }
-    .modal-title { font-size: 16px; font-weight: bold; margin-bottom: 15px; text-align: center; }
-    .form-group { margin-bottom: 12px; }
-    .form-group label { display: block; font-size: 14px; margin-bottom: 5px; color: #666; }
-    .form-group input, .form-group select { width: 100%; padding: 8px; border: 1px solid #ccc; border-radius: 4px; font-size: 14px; }
-    .modal-btns { display: flex; gap: 10px; margin-top: 15px; }
-    .btn-cancel { background: #f0f0f0; color: #333; flex: 1; border: none; padding: 10px; border-radius: 6px; cursor: pointer; }
-    .btn-submit { background: #1890ff; color: white; flex: 1; border: none; padding: 10px; border-radius: 6px; cursor: pointer; }
+    .file-input-btn:hover { background: #40a9ff; }
+    #excelFileInput { display: none; }
+
     .info-window-img { width: 100%; max-height: 150px; object-fit: cover; border-radius: 4px; margin-top: 8px; cursor: pointer; }
+    .status-badge { display: inline-block; padding: 2px 6px; border-radius: 3px; font-size: 11px; color: white; font-weight: bold; }
   </style>
 </head>
 <body>
 
   <!-- 顶部标题 -->
   <div class="header">
-    <h1>迪士尼倒树应急地图 (本地数据大盘)</h1>
+    <h1>迪士尼倒树应急地图 (Excel 拖入大盘版)</h1>
   </div>
 
   <!-- 📊 实时数据统计看板 -->
@@ -96,7 +94,7 @@
         </tbody>
       </table>
       <div class="stats-summary">
-        <span>当前待办总计: <span id="totalTodo" style="color:red;">0</span> 棵</span>
+        <span>待办总计: <span id="totalTodo" style="color:red;">0</span> 棵</span>
         <span>累计已修: <span id="totalDone" style="color:green;">0</span> 棵</span>
       </div>
     </div>
@@ -104,67 +102,20 @@
 
   <div id="map-container"></div>
 
-  <div class="action-panel">
-    <button class="btn" onclick="startReport()">📍 点击地图选取位置上报</button>
-  </div>
-
-  <!-- 上报弹窗 -->
-  <div class="modal" id="reportModal">
-    <div class="modal-content">
-      <div class="modal-title">上报倒树信息</div>
-      <div class="form-group">
-        <label>已选坐标</label>
-        <input type="text" id="geoInput" readonly style="background: #f5f5f5;">
-      </div>
-      <!-- 2. 分区选择 -->
-      <div class="form-group">
-        <label>所属主题园区</label>
-        <select id="areaZone">
-          <option value="米奇大街">米奇大街 (Mickey Avenue)</option>
-          <option value="奇想花园">奇想花园 (Gardens of Imagination)</option>
-          <option value="探险岛">探险岛 (Adventure Isle)</option>
-          <option value="宝藏湾">宝藏湾 (Treasure Cove)</option>
-          <option value="明日世界">明日世界 (Tomorrowland)</option>
-          <option value="梦幻世界">梦幻世界 (Fantasyland)</option>
-          <option value="玩具总动员">皮克斯玩具总动员 (Toy Story Land)</option>
-          <option value="疯狂动物城">疯狂动物城 (Zootopia)</option>
-          <option value="后勤及公共区域">周边/后勤/公共区域</option>
-        </select>
-      </div>
-      <div class="form-group">
-        <label>倒树数量 (棵)</label>
-        <input type="number" id="treeCount" value="1" min="1">
-      </div>
-      <!-- 1. 危险等级选择 -->
-      <div class="form-group">
-        <label>严重程度 (决定标签颜色)</label>
-        <select id="severity">
-          <option value="high">🔴 紧急 (阻断交通/主干道)</option>
-          <option value="medium" selected>🟡 中度 (部分妨碍/次干道)</option>
-          <option value="low">🟢 轻微 (绿化带内/无妨碍)</option>
-        </select>
-      </div>
-      <div class="form-group">
-        <label>现场照片 (可直接拍照)</label>
-        <input type="file" id="photoInput" accept="image/*">
-      </div>
-      <div class="modal-btns">
-        <button class="btn-cancel" onclick="closeModal()">取消</button>
-        <button class="btn-submit" id="submitBtn" onclick="submitReport()">提交</button>
-      </div>
-    </div>
+  <!-- 📥 Excel 文件拖拽/上传控制中心 -->
+  <div class="upload-panel" id="dropZone">
+    <div class="upload-title">📥 拖入腾讯文档导出的 Excel</div>
+    <div class="upload-tip">支持直接拖拽文件到此处，或点击按钮选择</div>
+    <label class="file-input-btn" for="excelFileInput">选择 Excel 文件</label>
+    <input type="file" id="excelFileInput" accept=".xlsx, .xls">
   </div>
 
   <script>
     let map;
     let markers = [];
-    let tempLngLat = null;
-    let isSelecting = false;
-
-    // 所有可用园区列表，用于初始化统计表
     const ALL_ZONES = ["米奇大街", "奇想花园", "探险岛", "宝藏湾", "明日世界", "梦幻世界", "玩具总动员", "疯狂动物城", "后勤及公共区域"];
 
-    // 初始化高德地图 - 载入卫星地图图层
+    // 初始化高德卫星地图
     map = new AMap.Map('map-container', {
       zoom: 15,
       center: [121.6578, 31.1436], // 迪士尼中心
@@ -175,11 +126,11 @@
       ]
     });
 
-    // 1. 根据严重程度，生成不同颜色的高德 Marker 图标 (使用 SVG 纯前端渲染，加载极快)
+    // 1. 根据严重程度，生成不同颜色的高德 Marker 图标 (SVG 渲染)
     function getMarkerIcon(severity) {
-      let color = '#f5222d'; // 红色 (high)
-      if (severity === 'medium') color = '#faad14'; // 黄色
-      if (severity === 'low') color = '#52c41a'; // 绿色
+      let color = '#faad14'; // 默认黄色 (中度)
+      if (severity && (severity.includes('红') || severity.includes('紧急') || severity.includes('high'))) color = '#f5222d';
+      if (severity && (severity.includes('绿') || severity.includes('轻微') || severity.includes('low'))) color = '#52c41a';
 
       const svg = `<svg viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg" width="30" height="30">
         <circle cx="50" cy="50" r="35" fill="${color}" stroke="#ffffff" stroke-width="8" />
@@ -193,66 +144,89 @@
       });
     }
 
-    // 从本地读取数据，渲染标记，并计算统计报表
-    function loadAndRenderData() {
-      // 清除旧标记
+    // 2. 解析拖入的 Excel 数据并渲染
+    function processExcelData(rawData) {
+      // 移除地图上原有的所有标记
       markers.forEach(m => map.remove(m));
       markers = [];
 
-      const savedData = JSON.parse(localStorage.getItem('treeIncidents') || '[]');
-      
-      // 初始化每个园区的计数器
       let zoneStats = {};
-      ALL_ZONES.forEach(zone => {
-        zoneStats[zone] = { todo: 0, done: 0 };
-      });
-
+      ALL_ZONES.forEach(zone => { zoneStats[zone] = { todo: 0, done: 0 }; });
       let totalTodoCount = 0;
       let totalDoneCount = 0;
 
-      // 遍历数据，渲染地图上的【未处理】标记，并累加统计数据
-      savedData.forEach((data, index) => {
-        // 累加统计（无论是否处理，都在 localStorage 中记录状态）
-        const zone = data.zone || "后勤及公共区域";
-        const count = parseInt(data.count || 0);
+      // 遍历 Excel 行数据
+      rawData.forEach((row, index) => {
+        // 自动模糊匹配列名，防止表格微调导致出错
+        const zone = findValueByKeys(row, ['区域', '主题园区', '所属主题园区']) || "后勤及公共区域";
+        const count = parseInt(findValueByKeys(row, ['数量', '倒树数量', '倒树数量 (棵)'])) || 1;
+        const severityText = findValueByKeys(row, ['严重程度', '程度']) || '中度';
+        const photoUrl = findValueByKeys(row, ['照片', '现场照片', '图片']);
+        const timeStr = findValueByKeys(row, ['提交时间', '时间']) || '未知时间';
+        
+        // 解析状态：如果表格有“状态”列，或者“已处理”标记。默认为待处理 (todo)
+        const statusText = findValueByKeys(row, ['状态', '处理状态']) || '待处理';
+        const isResolved = statusText.includes('已') || statusText.includes('完成') || statusText.includes('销项');
 
-        if (data.status === 'resolved') {
-          zoneStats[zone].done += count;
+        // 解析经纬度（支持单独的经纬度列，也支持腾讯定位题合并导出的一列）
+        let lat = null, lng = null;
+        const geoString = findValueByKeys(row, ['地理位置', '定位', '位置', '经纬度']);
+        
+        if (geoString) {
+          // 尝试从“31.123, 121.456”或“121.456, 31.123”中分离经纬度
+          const parts = geoString.split(/[\s,，]+/);
+          if (parts.length >= 2) {
+            // 简单判断谁是经度（121左右），谁是纬度（31左右）
+            const num1 = parseFloat(parts[0]);
+            const num2 = parseFloat(parts[1]);
+            if (num1 > 120 && num1 < 122) { lng = num1; lat = num2; } 
+            else { lat = num1; lng = num2; }
+          }
+        } else {
+          // 尝试读取独立的“经度”和“纬度”列
+          lng = parseFloat(findValueByKeys(row, ['经度', 'Longitude']));
+          lat = parseFloat(findValueByKeys(row, ['纬度', 'Latitude']));
+        }
+
+        // 统一归档统计
+        const matchedZone = ALL_ZONES.includes(zone) ? zone : "后勤及公共区域";
+        if (isResolved) {
+          zoneStats[matchedZone].done += count;
           totalDoneCount += count;
         } else {
-          zoneStats[zone].todo += count;
+          zoneStats[matchedZone].todo += count;
           totalTodoCount += count;
 
-          // 仅在地图上渲染【未处理】的倒树
-          let marker = new AMap.Marker({
-            position: [data.lng, data.lat],
-            icon: getMarkerIcon(data.severity), // 👈 动态获取对应颜色的图标
-            offset: new AMap.Pixel(-15, -15),
-            map: map
-          });
-
-          let imageHtml = data.photo ? `<img class="info-window-img" src="${data.photo}" onclick="window.open('${data.photo}')">` : '<p style="color:#999;font-size:12px;margin-top:5px;">(无照片)</p>';
-          let severityText = { high: '🔴 紧急', medium: '🟡 中度', low: '🟢 轻微' }[data.severity] || '🟡 中度';
-
-          marker.on('click', () => {
-            let infoWindow = new AMap.InfoWindow({
-              content: `
-                <div style="padding:10px; font-size:13px; line-height:1.6; max-width:240px;">
-                  <b>🌲 倒树详情</b><br>
-                  区域: <b>${zone}</b><br>
-                  数量: ${count} 棵<br>
-                  程度: ${severityText}<br>
-                  时间: ${data.time}<br>
-                  ${imageHtml}
-                  <button onclick="resolveIncident(${index})" style="margin-top:8px; width:100%; padding:5px; background:#52c41a; color:white; border:none; border-radius:4px; cursor:pointer;">已处理(销项)</button>
-                </div>
-              `,
-              offset: new AMap.Pixel(0, -15)
+          // 仅在地图上渲染有有效经纬度且【未处理】的倒树
+          if (lng && lat && !isNaN(lng) && !isNaN(lat)) {
+            let marker = new AMap.Marker({
+              position: [lng, lat],
+              icon: getMarkerIcon(severityText),
+              offset: new AMap.Pixel(-15, -15),
+              map: map
             });
-            infoWindow.open(map, marker.getPosition());
-          });
 
-          markers.push(marker);
+            let imageHtml = photoUrl ? `<img class="info-window-img" src="${photoUrl}" onclick="window.open('${photoUrl}')">` : '<p style="color:#999;font-size:12px;margin-top:5px;">(无照片)</p>';
+
+            marker.on('click', () => {
+              let infoWindow = new AMap.InfoWindow({
+                content: `
+                  <div style="padding:10px; font-size:13px; line-height:1.6; max-width:240px;">
+                    <b>🌲 倒树详情</b><br>
+                    区域: <b>${matchedZone}</b><br>
+                    数量: ${count} 棵<br>
+                    程度: ${severityText}<br>
+                    时间: ${timeStr}<br>
+                    ${imageHtml}
+                  </div>
+                `,
+                offset: new AMap.Pixel(0, -15)
+              });
+              infoWindow.open(map, marker.getPosition());
+            });
+
+            markers.push(marker);
+          }
         }
       });
 
@@ -261,7 +235,6 @@
       tbody.innerHTML = '';
       ALL_ZONES.forEach(zone => {
         const stats = zoneStats[zone];
-        // 仅在有数据时突出显示，界面会更清爽
         const todoStyle = stats.todo > 0 ? 'color: red; font-weight: bold;' : 'color: #999;';
         const doneStyle = stats.done > 0 ? 'color: green;' : 'color: #999;';
         
@@ -277,109 +250,74 @@
       // 更新总数大盘
       document.getElementById('totalTodo').innerText = totalTodoCount;
       document.getElementById('totalDone').innerText = totalDoneCount;
-    }
 
-    // 开始选点
-    function startReport() {
-      isSelecting = true;
-      alert('请在地图上点击倒树的确切位置。');
-      map.on('click', onMapClick);
-    }
-
-    function onMapClick(e) {
-      if (!isSelecting) return;
-      tempLngLat = e.lnglat;
-      document.getElementById('geoInput').value = `${tempLngLat.getLng().toFixed(5)}, ${tempLngLat.getLat().toFixed(5)}`;
-      document.getElementById('reportModal').style.display = 'flex';
-      isSelecting = false;
-      map.off('click', onMapClick);
-    }
-
-    // 辅助压缩图片
-    function fileToBase64(file) {
-      return new Promise((resolve, reject) => {
-        const reader = new FileReader();
-        reader.onload = function(e) {
-          const img = new Image();
-          img.onload = function() {
-            const canvas = document.createElement('canvas');
-            const ctx = canvas.getContext('2d');
-            const maxW = 600;
-            const scale = Math.min(maxW / img.width, 1);
-            canvas.width = img.width * scale;
-            canvas.height = img.height * scale;
-            ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
-            resolve(canvas.toDataURL('image/jpeg', 0.7));
-          };
-          img.src = e.target.result;
-        };
-        reader.onerror = reject;
-        reader.readAsDataURL(file);
-      });
-    }
-
-    // 提交数据
-    async function submitReport() {
-      const submitBtn = document.getElementById('submitBtn');
-      const photoInput = document.getElementById('photoInput');
-      
-      submitBtn.disabled = true;
-      submitBtn.innerText = '正在保存...';
-
-      let photoBase64 = '';
-
-      try {
-        if (photoInput.files.length > 0) {
-          const file = photoInput.files[0];
-          photoBase64 = await fileToBase64(file);
-        }
-
-        const zone = document.getElementById('areaZone').value;
-        const count = parseInt(document.getElementById('treeCount').value) || 1;
-        const severity = document.getElementById('severity').value;
-        const now = new Date();
-        const timeStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')} ${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
-
-        const savedData = JSON.parse(localStorage.getItem('treeIncidents') || '[]');
-        
-        savedData.push({
-          lng: tempLngLat.getLng(),
-          lat: tempLngLat.getLat(),
-          zone: zone,          // 保存分区
-          count: count,
-          severity: severity,  // 保存危险级别
-          time: timeStr,
-          photo: photoBase64,
-          status: 'todo'       // 新上报状态默认为 'todo' (待处理)
-        });
-
-        localStorage.setItem('treeIncidents', JSON.stringify(savedData));
-        
-        loadAndRenderData();
-        closeModal();
-        alert('上报成功！数据已更新。');
-      } catch (error) {
-        alert('保存失败：' + error.message);
-      } finally {
-        submitBtn.disabled = false;
-        submitBtn.innerText = '提交';
+      // 如果有标记，自动缩放地图到能容纳所有标点
+      if (markers.length > 0) {
+        map.setFitView();
       }
     }
 
-    // 销项：不直接物理删除，而是标记为 'resolved'（已处理），以便统计“已修复”的数量
-    window.resolveIncident = function(index) {
-      if(confirm("确定已处理完毕，要进行销项吗？")) {
-        const savedData = JSON.parse(localStorage.getItem('treeIncidents') || '[]');
-        if (savedData[index]) {
-          savedData[index].status = 'resolved'; // 👈 标记状态为已解决
-          localStorage.setItem('treeIncidents', JSON.stringify(savedData));
+    // 辅助工具：在 row 对象中模糊匹配包含关键字的属性值
+    function findValueByKeys(row, keys) {
+      for (let prop in row) {
+        if (row.hasOwnProperty(prop)) {
+          const lowerProp = prop.toLowerCase().trim();
+          if (keys.some(k => lowerProp.includes(k.toLowerCase()))) {
+            return row[prop];
+          }
         }
-        
-        map.clearInfoWindow();
-        loadAndRenderData();
-        alert('销项成功，已归档入统计数据！');
       }
+      return null;
     }
+
+    // 3. 监听 Excel 拖拽与上传事件
+    const dropZone = document.getElementById('dropZone');
+    const fileInput = document.getElementById('excelFileInput');
+
+    // 处理文件载入与解析
+    function handleFile(file) {
+      if (!file) return;
+      const reader = new FileReader();
+      reader.onload = function(e) {
+        try {
+          const data = new Uint8Array(e.target.result);
+          const workbook = XLSX.read(data, { type: 'array' });
+          const firstSheetName = workbook.SheetNames[0];
+          const worksheet = workbook.Sheets[firstSheetName];
+          // 将 Excel 转换为 JSON 数组对象
+          const jsonData = XLSX.utils.sheet_to_json(worksheet);
+          
+          processExcelData(jsonData);
+          alert(`成功解析了 ${jsonData.length} 条数据！地图已更新。`);
+        } catch (error) {
+          alert('解析 Excel 失败，请检查文件格式。错误：' + error.message);
+        }
+      };
+      reader.readAsArrayBuffer(file);
+    }
+
+    // 点击选择文件
+    fileInput.addEventListener('change', (e) => {
+      handleFile(e.target.files[0]);
+    });
+
+    // 拖拽事件绑定
+    dropZone.addEventListener('dragover', (e) => {
+      e.preventDefault();
+      dropZone.classList.add('dragover');
+    });
+
+    dropZone.addEventListener('dragleave', () => {
+      dropZone.classList.remove('dragover');
+    });
+
+    dropZone.addEventListener('drop', (e) => {
+      e.preventDefault();
+      dropZone.classList.remove('dragover');
+      if (e.dataTransfer.files.length > 0) {
+        handleFile(e.dataTransfer.files[0]);
+      }
+    });
 
     // 折叠/展开统计面板
     window.toggleStats = function() {
@@ -393,14 +331,6 @@
         icon.innerText = '▲';
       }
     }
-
-    function closeModal() {
-      document.getElementById('reportModal').style.display = 'none';
-      document.getElementById('photoInput').value = '';
-    }
-
-    // 首次加载
-    loadAndRenderData();
   </script>
 </body>
 </html>
