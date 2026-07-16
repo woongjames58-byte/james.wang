@@ -17,8 +17,8 @@
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <script>
     // ⚠️ 请填入你的 Supabase 配置
-    const SUPABASE_URL = "https://hpfgxlxnhnoemktmuksv.supabase.co"; // 👈 已修正为正确的 f
-    const SUPABASE_KEY = "sb_publishable_sXHtnCpYoJL4JRrhoVMHGw_OAcakwg3";                 // 👈 填入你的 anon key
+    const SUPABASE_URL = "https://hpfgxlxnhnoemktmuksv.supabase.co"; 
+    const SUPABASE_KEY = "YOUR_SUPABASE_ANON_KEY";                  // 👈 填入你的 anon key
     
     const db = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
   </script>
@@ -37,23 +37,42 @@
     /* 📊 统计看板样式 (优化结构：汇总行提到最上方固定) */
     .stats-panel {
       position: absolute; top: 80px; left: 10px; z-index: 999;
-      width: 260px; background: rgba(255, 255, 255, 0.95);
+      width: 320px; background: rgba(255, 255, 255, 0.95);
       border-radius: 8px; box-shadow: 0 2px 12px rgba(0,0,0,0.15);
       overflow: hidden; transition: all 0.3s ease;
+      display: flex; flex-direction: column; max-height: 75vh;
     }
     .stats-header {
-      background: #1890ff; color: white; padding: 8px 12px;
+      background: #1890ff; color: white; padding: 10px 12px;
       font-size: 13px; font-weight: bold; display: flex;
       justify-content: space-between; align-items: center; cursor: pointer;
+      flex-shrink: 0;
     }
     .stats-summary-top {
       background: #f5f5f5; padding: 8px 10px; border-bottom: 1px solid #ddd;
-      font-size: 13px; font-weight: bold; display: flex; justify-content: space-between;
+      font-size: 12px; font-weight: bold; display: flex; justify-content: space-between;
+      flex-shrink: 0;
     }
-    .stats-content { padding: 8px 10px; max-height: 200px; overflow-y: auto; font-size: 12px; }
-    .stats-table { width: 100%; border-collapse: collapse; text-align: left; }
+    
+    /* 看板内 Tab 切换样式 */
+    .stats-tabs {
+      display: flex; background: #eaeaea; border-bottom: 1px solid #ddd; flex-shrink: 0;
+    }
+    .tab-btn {
+      flex: 1; padding: 6px; border: none; background: none; font-size: 11px; cursor: pointer; color: #555;
+    }
+    .tab-btn.active {
+      background: #fff; font-weight: bold; color: #1890ff; border-bottom: 2px solid #1890ff;
+    }
+
+    .stats-content { padding: 8px 10px; overflow-y: auto; font-size: 12px; flex-grow: 1; }
+    .stats-table { width: 100%; border-collapse: collapse; text-align: left; margin-bottom: 10px; }
     .stats-table th, .stats-table td { padding: 6px 4px; border-bottom: 1px solid #eee; }
-    .stats-table th { color: #666; font-weight: bold; position: sticky; top: 0; background: rgba(255,255,255,0.95); }
+    .stats-table th { color: #666; font-weight: bold; position: sticky; top: 0; background: rgba(255,255,255,0.95); z-index: 1; }
+    
+    /* 联动表格中的行移入效果 */
+    .clickable-row { cursor: pointer; transition: background 0.2s; }
+    .clickable-row:hover { background: #e6f7ff; }
 
     /* 🏷️ 地图点标记上的直观文本标签 */
     .amap-marker-label {
@@ -64,6 +83,17 @@
       border-radius: 4px; font-size: 10px; white-space: nowrap;
       box-shadow: 0 1px 4px rgba(0,0,0,0.3); pointer-events: none;
       border: 1px solid rgba(255,255,255,0.2);
+    }
+
+    /* 📍 突出显示的高亮动画环 */
+    @keyframes pulse {
+      0% { transform: scale(1); opacity: 1; }
+      100% { transform: scale(2.2); opacity: 0; }
+    }
+    .highlight-marker-ring {
+      position: absolute; width: 30px; height: 30px;
+      border: 3px solid #1890ff; border-radius: 50%;
+      animation: pulse 1.2s infinite ease-out; pointer-events: none;
     }
 
     /* 📍 控制按钮 */
@@ -106,25 +136,65 @@
   <!-- 📊 实时数据统计看板 -->
   <div class="stats-panel" id="statsPanel">
     <div class="stats-header" onclick="toggleStats()">
-      <span>📊 倒树数据实时盘口</span>
+      <span>📊 倒树数据多维看板</span>
       <span id="toggleIcon">▼</span>
     </div>
-    <!-- 优化 2：把总计提到最上方，固定显示 -->
+    
     <div class="stats-summary-top" id="statsSummaryTop">
-      <span>待办总数: <span id="totalTodo" style="color:red;">0</span> 棵</span>
-      <span>累计已修: <span id="totalDone" style="color:green;">0</span> 棵</span>
+      <span>待办: <span id="totalTodo" style="color:red; font-weight: bold;">0</span> 棵</span>
+      <span>已修: <span id="totalDone" style="color:green; font-weight: bold;">0</span> 棵</span>
     </div>
+
+    <!-- 📊 Tab 切换按钮 -->
+    <div class="stats-tabs" id="statsTabs">
+      <button class="tab-btn active" onclick="switchTab('zone')">区域分布</button>
+      <button class="tab-btn" onclick="switchTab('severityTab')">严重程度</button>
+      <button class="tab-btn" onclick="switchTab('reporterTab')">上报贡献榜</button>
+    </div>
+
     <div class="stats-content" id="statsContent">
-      <table class="stats-table">
-        <thead>
-          <tr>
-            <th>区域</th>
-            <th>待处理(棵)</th>
-            <th>已修复(棵)</th>
-          </tr>
-        </thead>
-        <tbody id="statsTableBody"></tbody>
-      </table>
+      <!-- 1. 区域统计 Table -->
+      <div id="zoneSection">
+        <table class="stats-table">
+          <thead>
+            <tr>
+              <th>区域</th>
+              <th>待处理</th>
+              <th>已修复</th>
+            </tr>
+          </thead>
+          <tbody id="statsTableBody"></tbody>
+        </table>
+      </div>
+
+      <!-- 2. 严重程度点位 Table (支持点击联动) -->
+      <div id="severitySection" style="display: none;">
+        <table class="stats-table">
+          <thead>
+            <tr>
+              <th>级别</th>
+              <th>区域</th>
+              <th>数量</th>
+              <th>操作</th>
+            </tr>
+          </thead>
+          <tbody id="severityTableBody"></tbody>
+        </table>
+      </div>
+
+      <!-- 3. 上报贡献人 Table -->
+      <div id="reporterSection" style="display: none;">
+        <table class="stats-table">
+          <thead>
+            <tr>
+              <th>上报人</th>
+              <th>总棵数</th>
+              <th>上报次数</th>
+            </tr>
+          </thead>
+          <tbody id="reporterTableBody"></tbody>
+        </table>
+      </div>
     </div>
   </div>
 
@@ -140,7 +210,6 @@
   <div class="modal" id="reportModal">
     <div class="modal-content">
       <div class="modal-title">现场倒树上报</div>
-      <!-- 优化 1：新增上报人姓名输入框 -->
       <div class="form-group">
         <label>上报人姓名 <span style="color: red;">*</span></label>
         <input type="text" id="reporterInput" placeholder="请输入您的名字" required>
@@ -191,6 +260,10 @@
     let markers = [];
     let tempLngLat = null;
     let isSelecting = false;
+    let rawCloudData = []; // 缓存全局云端数据，方便 Tab 切换计算
+    let activeHighlightMarker = null; // 当前高亮的点标记
+    let highlightRing = null; // 高亮光圈对象
+    
     const ALL_ZONES = ["米奇大街", "奇想花园", "探险岛", "宝藏湾", "明日世界", "梦幻世界", "玩具总动员", "疯狂动物城", "后勤及公共区域"];
 
     map = new AMap.Map('map-container', {
@@ -208,21 +281,24 @@
       }
     });
 
-    function getMarkerIcon(severity) {
+    function getMarkerIcon(severity, isLarge = false) {
       let color = '#faad14';
       if (severity === 'high') color = '#f5222d';
       if (severity === 'low') color = '#52c41a';
 
-      const svg = `<svg viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg" width="30" height="30"><circle cx="50" cy="50" r="35" fill="${color}" stroke="#ffffff" stroke-width="8" /><circle cx="50" cy="50" r="10" fill="#ffffff" /></svg>`;
+      const size = isLarge ? 42 : 30; // 被选中时图标放大
+      const svg = `<svg viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg" width="${size}" height="${size}"><circle cx="50" cy="50" r="35" fill="${color}" stroke="#ffffff" stroke-width="8" /><circle cx="50" cy="50" r="10" fill="#ffffff" /></svg>`;
       return new AMap.Icon({
-        size: new AMap.Size(30, 30),
+        size: new AMap.Size(size, size),
         image: 'data:image/svg+xml;utf8,' + encodeURIComponent(svg),
-        imageSize: new AMap.Size(30, 30)
+        imageSize: new AMap.Size(size, size)
       });
     }
 
-    // 🔄 从 Supabase 云端读取最新数据
+    // 🔄 从 Supabase 云端读取并渲染最新数据
     async function loadAndRenderData() {
+      // 移除原有的高亮和点标记
+      removeHighlight();
       markers.forEach(m => map.remove(m));
       markers = [];
 
@@ -233,6 +309,8 @@
           .order('id', { ascending: false });
 
         if (error) throw error;
+
+        rawCloudData = cloudData; // 存入本地变量
 
         let zoneStats = {};
         ALL_ZONES.forEach(zone => { zoneStats[zone] = { todo: 0, done: 0 }; });
@@ -249,7 +327,7 @@
           const photo = item.photo;
           const lng = item.lng;
           const lat = item.lat;
-          const reporter = item.reporter || "未知上报人"; // 字段：上报人
+          const reporter = item.reporter || "未知上报人";
 
           if (status === 'resolved') {
             zoneStats[zone].done += count;
@@ -266,9 +344,11 @@
                 map: map
               });
 
-              // 优化 3：给地图上的标记点直接附加一个漂浮的信息文本框，实现一眼看完基本信息
+              // 自定义属性绑定
+              marker.setExtData({ id: id, severity: severity, lng: lng, lat: lat });
+
               marker.setLabel({
-                offset: new AMap.Pixel(15, -10), // 位置偏移
+                offset: new AMap.Pixel(15, -10),
                 content: `<div class="custom-marker-label">[${zone}] ${count}棵</div>`,
                 direction: 'right'
               });
@@ -277,41 +357,212 @@
               let severityText = { high: '🔴 紧急', medium: '🟡 中度', low: '🟢 轻微' }[severity] || '🟡 中度';
 
               marker.on('click', () => {
-                let infoWindow = new AMap.InfoWindow({
-                  content: `
-                    <div style="padding:10px; font-size:13px; line-height:1.6; max-width:240px;">
-                      <b>🌲 倒树详情</b><br>
-                      区域: <b>${zone}</b><br>
-                      数量: <b>${count}</b> 棵<br>
-                      程度: ${severityText}<br>
-                      上报人: <b>${reporter}</b><br>
-                      时间: ${time}<br>
-                      ${imageHtml}
-                      <button onclick="resolveIncident('${id}')" style="margin-top:8px; width:100%; padding:5px; background:#52c41a; color:white; border:none; border-radius:4px; cursor:pointer;">已处理(销项)</button>
-                    </div>
-                  `,
-                  offset: new AMap.Pixel(0, -15)
-                });
-                infoWindow.open(map, marker.getPosition());
+                showInfoWindow(marker, zone, count, severityText, reporter, time, imageHtml, id);
               });
               markers.push(marker);
             }
           }
         });
 
+        // 渲染 1：更新“区域分布”表格
         const tbody = document.getElementById('statsTableBody');
         tbody.innerHTML = '';
         ALL_ZONES.forEach(zone => {
           const stats = zoneStats[zone];
           tbody.innerHTML += `<tr><td>${zone}</td><td style="${stats.todo > 0 ? 'color: red; font-weight: bold;' : 'color:#999;'}">${stats.todo}</td><td style="${stats.done > 0 ? 'color: green;' : 'color:#999;'}">${stats.done}</td></tr>`;
         });
+        
         document.getElementById('totalTodo').innerText = totalTodoCount;
         document.getElementById('totalDone').innerText = totalDoneCount;
+
+        // 刷新当前活动的 Tab 渲染
+        renderCurrentTab();
 
       } catch (error) {
         console.error("加载云端数据失败:", error);
         alert("云端数据加载失败，请检查网络或配置：" + error.message);
       }
+    }
+
+    // 渲染地图上的信息弹窗与触发点位高亮
+    function showInfoWindow(marker, zone, count, severityText, reporter, time, imageHtml, id) {
+      highlightMarkerOnMap(marker);
+
+      let infoWindow = new AMap.InfoWindow({
+        content: `
+          <div style="padding:10px; font-size:13px; line-height:1.6; max-width:240px;">
+            <b>🌲 倒树详情</b><br>
+            区域: <b>${zone}</b><br>
+            数量: <b>${count}</b> 棵<br>
+            程度: ${severityText}<br>
+            上报人: <b>${reporter}</b><br>
+            时间: ${time}<br>
+            ${imageHtml}
+            <button onclick="resolveIncident('${id}')" style="margin-top:8px; width:100%; padding:5px; background:#52c41a; color:white; border:none; border-radius:4px; cursor:pointer;">已处理(销项)</button>
+          </div>
+        `,
+        offset: new AMap.Pixel(0, -15)
+      });
+      infoWindow.open(map, marker.getPosition());
+      
+      // 当关闭信息窗体时，恢复原样
+      infoWindow.on('close', () => {
+        removeHighlight();
+      });
+    }
+
+    // 🌟 在地图上高亮并聚焦某个点位
+    function highlightMarkerOnMap(marker) {
+      removeHighlight(); // 清除上一次的高亮状态
+
+      activeHighlightMarker = marker;
+      const extData = marker.getExtData();
+      
+      // 1. 放大该点的 Icon
+      marker.setIcon(getMarkerIcon(extData.severity, true));
+      marker.setOffset(new AMap.Pixel(-21, -21));
+      marker.setzIndex(999);
+
+      // 2. 添加闪烁的 CSS 呼吸光圈
+      highlightRing = new AMap.Marker({
+        position: marker.getPosition(),
+        content: '<div class="highlight-marker-ring"></div>',
+        offset: new AMap.Pixel(-15, -15),
+        zIndex: 998,
+        map: map
+      });
+
+      // 3. 将地图视野移到该点并放大
+      map.setZoomAndCenter(17, marker.getPosition());
+    }
+
+    // 还原点标记外观
+    function removeHighlight() {
+      if (activeHighlightMarker) {
+        const extData = activeHighlightMarker.getExtData();
+        activeHighlightMarker.setIcon(getMarkerIcon(extData.severity, false));
+        activeHighlightMarker.setOffset(new AMap.Pixel(-15, -15));
+        activeHighlightMarker.setzIndex(100);
+        activeHighlightMarker = null;
+      }
+      if (highlightRing) {
+        map.remove(highlightRing);
+        highlightRing = null;
+      }
+    }
+
+    // 📊 Tab 切换逻辑
+    window.switchTab = function(tabName) {
+      const tabs = document.querySelectorAll('.tab-btn');
+      tabs.forEach(btn => btn.classList.remove('active'));
+
+      document.getElementById('zoneSection').style.display = 'none';
+      document.getElementById('severitySection').style.display = 'none';
+      document.getElementById('reporterSection').style.display = 'none';
+
+      if (tabName === 'zone') {
+        tabs[0].classList.add('active');
+        document.getElementById('zoneSection').style.display = 'block';
+      } else if (tabName === 'severityTab') {
+        tabs[1].classList.add('active');
+        document.getElementById('severitySection').style.display = 'block';
+        renderSeverityTab();
+      } else if (tabName === 'reporterTab') {
+        tabs[2].classList.add('active');
+        document.getElementById('reporterSection').style.display = 'block';
+        renderReporterTab();
+      }
+    }
+
+    function renderCurrentTab() {
+      const activeTab = document.querySelector('.tab-btn.active');
+      if (activeTab.innerText.includes('严重程度')) renderSeverityTab();
+      if (activeTab.innerText.includes('上报贡献')) renderReporterTab();
+    }
+
+    // 渲染列表：按严重程度分类（支持点击定位联动）
+    function renderSeverityTab() {
+      const tbody = document.getElementById('severityTableBody');
+      tbody.innerHTML = '';
+
+      // 只列出待处理 ('todo') 的点位
+      const todoItems = rawCloudData.filter(item => item.status !== 'resolved' && item.lng && item.lat);
+
+      if (todoItems.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="4" style="text-align:center;color:#999;">暂无待处理点位</td></tr>';
+        return;
+      }
+
+      // 排序规则：🔴 紧急 > 🟡 中度 > 🟢 轻微
+      const severityOrder = { high: 1, medium: 2, low: 3 };
+      todoItems.sort((a, b) => severityOrder[a.severity] - severityOrder[b.severity]);
+
+      todoItems.forEach(item => {
+        const levelText = { high: '🔴 紧急', medium: '🟡 中度', low: '🟢 轻微' }[item.severity] || '🟡 中度';
+        const zone = item.zone || "公共区";
+        const count = item.count || 1;
+
+        const row = document.createElement('tr');
+        row.className = 'clickable-row';
+        row.innerHTML = `
+          <td><b>${levelText}</b></td>
+          <td>${zone}</td>
+          <td><b>${count}</b>棵</td>
+          <td><span style="color:#1890ff; font-weight:bold;">定位 📍</span></td>
+        `;
+
+        // 行点击事件：在地图上查找对应的 marker 并突出显示
+        row.addEventListener('click', () => {
+          const targetMarker = markers.find(m => m.getExtData().id === item.id);
+          if (targetMarker) {
+            // 自动模拟高德 Marker 点击事件
+            targetMarker.emit('click');
+          } else {
+            alert('该位置标记在地图上未找到');
+          }
+        });
+
+        tbody.appendChild(row);
+      });
+    }
+
+    // 渲染列表：上报贡献榜表
+    function renderReporterTab() {
+      const tbody = document.getElementById('reporterTableBody');
+      tbody.innerHTML = '';
+
+      let reporterStats = {};
+
+      rawCloudData.forEach(item => {
+        const name = item.reporter ? item.reporter.trim() : "匿名";
+        const count = parseInt(item.count || 0);
+        if (!reporterStats[name]) {
+          reporterStats[name] = { totalTrees: 0, reportsCount: 0 };
+        }
+        reporterStats[name].totalTrees += count;
+        reporterStats[name].reportsCount += 1;
+      });
+
+      const sortedReporters = Object.keys(reporterStats).map(name => ({
+        name: name,
+        ...reporterStats[name]
+      })).sort((a, b) => b.totalTrees - a.totalTrees); // 按上报棵树高低排序
+
+      if (sortedReporters.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="3" style="text-align:center;color:#999;">无上报记录</td></tr>';
+        return;
+      }
+
+      sortedReporters.forEach((item, index) => {
+        const medal = index === 0 ? '🥇 ' : index === 1 ? '🥈 ' : index === 2 ? '🥉 ' : '';
+        tbody.innerHTML += `
+          <tr>
+            <td>${medal}<b>${item.name}</b></td>
+            <td style="color:#1890ff; font-weight:bold;">${item.totalTrees} 棵</td>
+            <td>${item.reportsCount} 次</td>
+          </tr>
+        `;
+      });
     }
 
     function startReport() {
@@ -358,7 +609,6 @@
         return;
       }
       
-      // 记住用户的姓名，下次不用重复输入
       localStorage.setItem("reporter_name", reporterName);
 
       const submitBtn = document.getElementById('submitBtn');
@@ -387,7 +637,7 @@
               time: timeStr, 
               photo: photoBase64, 
               status: 'todo',
-              reporter: reporterName // 写入上报人姓名
+              reporter: reporterName
             }
           ]);
 
@@ -426,15 +676,18 @@
     window.toggleStats = function() {
       const content = document.getElementById('statsContent');
       const summaryTop = document.getElementById('statsSummaryTop');
+      const tabs = document.getElementById('statsTabs');
       const icon = document.getElementById('toggleIcon');
       
       if (content.style.display === 'none') {
         content.style.display = 'block';
         summaryTop.style.display = 'flex';
+        tabs.style.display = 'flex';
         icon.innerText = '▼';
       } else {
         content.style.display = 'none';
-        summaryTop.style.display = 'none'; // 折叠时同时隐藏顶部总数，让看板保持极简
+        summaryTop.style.display = 'none'; 
+        tabs.style.display = 'none';
         icon.innerText = '▲';
       }
     }
