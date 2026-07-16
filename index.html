@@ -16,10 +16,12 @@
   <!-- 2. 引入 Supabase 官方云数据库 SDK -->
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <script>
-    // ⚠️ 填入你在 Supabase 后台复制的凭证
+    // ⚠️ 请在这里填入你在 Supabase 后台复制的凭证
     const SUPABASE_URL = "https://hpfgxlxnhnoemktmuksv.supabase.co/rest/v1/";         // 👈 替换成你的 Project URL
-    const SUPABASE_KEY = "sb_publishable_sXHtnCpYoJL4JRrhoVMHGw_OAcakwg3";    // 👈 替换成你的 anon public key
-    const supabase = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+    const SUPABASE_KEY = "sb_publishable_sXHtnCpYoJL4JRrhoVMHGw_OAcakwg3";    // 👈 替换成你的 anon public key（即以 sb_publishable_ 开头的那个）
+    
+    // 使用 db 作为变量名，完美避开命名冲突
+    const db = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
   </script>
 
   <style>
@@ -198,8 +200,8 @@
       markers = [];
 
       try {
-        // 从 Supabase 拉取所有数据
-        const { data: cloudData, error } = await supabase
+        // 🌟 使用修改后的 db 变量从 Supabase 拉取所有数据
+        const { data: cloudData, error } = await db
           .from('incidents')
           .select('*')
           .order('id', { ascending: false });
@@ -329,8 +331,8 @@
         const now = new Date();
         const timeStr = `${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')} ${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
 
-        // 🌟 向 Supabase 数据库插入一条数据
-        const { error } = await supabase
+        // 🌟 使用修改后的 db 变量向 Supabase 数据库插入数据
+        const { error } = await db
           .from('incidents')
           .insert([
             { 
@@ -361,7 +363,8 @@
     window.resolveIncident = async function(id) {
       if(confirm("确定已处理完毕，要进行销项吗？")) {
         try {
-          const { error } = await supabase
+          // 🌟 使用修改后的 db 变量更新数据状态
+          const { error } = await db
             .from('incidents')
             .update({ status: 'resolved' })
             .eq('id', id);
