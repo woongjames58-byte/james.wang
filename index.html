@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-  <title>迪士尼倒树应急地图 (Supabase 实时共享版)</title>
+  <title>迪士尼倒树应急地图 (多人共享版)</title>
   
   <!-- 1. 引入高德地图 JS API -->
   <script type="text/javascript">
@@ -16,11 +16,10 @@
   <!-- 2. 引入 Supabase 官方云数据库 SDK -->
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <script>
-    // ⚠️ 请在这里填入你在 Supabase 后台复制的凭证
-  const SUPABASE_URL = "https://hpfgxlxnhnoemktmuksv.supabase.co";        // 👈 替换成你的 Project URL
-    const SUPABASE_KEY = "sb_publishable_sXHtnCpYoJL4JRrhoVMHGw_OAcakwg3";    // 👈 替换成你的 anon public key（即以 sb_publishable_ 开头的那个）
+    // ⚠️ 请填入你的 Supabase 配置
+    const SUPABASE_URL = "https://hpfgxlxnhnoemktmuksv.supabase.co"; // 👈 已修正为正确的 f
+    const SUPABASE_KEY = "sb_publishable_sXHtnCpYoJL4JRrhoVMHGw_OAcakwg3";                 // 👈 填入你的 anon key
     
-    // 使用 db 作为变量名，完美避开命名冲突
     const db = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
   </script>
 
@@ -35,7 +34,7 @@
     }
     .header h1 { font-size: 16px; color: #333; }
 
-    /* 📊 统计看板样式 */
+    /* 📊 统计看板样式 (优化结构：汇总行提到最上方固定) */
     .stats-panel {
       position: absolute; top: 80px; left: 10px; z-index: 999;
       width: 260px; background: rgba(255, 255, 255, 0.95);
@@ -47,11 +46,25 @@
       font-size: 13px; font-weight: bold; display: flex;
       justify-content: space-between; align-items: center; cursor: pointer;
     }
-    .stats-content { padding: 10px; max-height: 260px; overflow-y: auto; font-size: 12px; }
+    .stats-summary-top {
+      background: #f5f5f5; padding: 8px 10px; border-bottom: 1px solid #ddd;
+      font-size: 13px; font-weight: bold; display: flex; justify-content: space-between;
+    }
+    .stats-content { padding: 8px 10px; max-height: 200px; overflow-y: auto; font-size: 12px; }
     .stats-table { width: 100%; border-collapse: collapse; text-align: left; }
     .stats-table th, .stats-table td { padding: 6px 4px; border-bottom: 1px solid #eee; }
-    .stats-table th { color: #666; font-weight: bold; }
-    .stats-summary { margin-top: 8px; padding-top: 8px; border-top: 1px dashed #ccc; font-weight: bold; display: flex; justify-content: space-between; }
+    .stats-table th { color: #666; font-weight: bold; position: sticky; top: 0; background: rgba(255,255,255,0.95); }
+
+    /* 🏷️ 地图点标记上的直观文本标签 */
+    .amap-marker-label {
+      border: none !important; background: transparent !important;
+    }
+    .custom-marker-label {
+      background: rgba(0, 0, 0, 0.75); color: #fff; padding: 2px 6px;
+      border-radius: 4px; font-size: 10px; white-space: nowrap;
+      box-shadow: 0 1px 4px rgba(0,0,0,0.3); pointer-events: none;
+      border: 1px solid rgba(255,255,255,0.2);
+    }
 
     /* 📍 控制按钮 */
     .action-panel {
@@ -93,8 +106,13 @@
   <!-- 📊 实时数据统计看板 -->
   <div class="stats-panel" id="statsPanel">
     <div class="stats-header" onclick="toggleStats()">
-      <span>📊 区域倒树数据统计</span>
+      <span>📊 倒树数据实时盘口</span>
       <span id="toggleIcon">▼</span>
+    </div>
+    <!-- 优化 2：把总计提到最上方，固定显示 -->
+    <div class="stats-summary-top" id="statsSummaryTop">
+      <span>待办总数: <span id="totalTodo" style="color:red;">0</span> 棵</span>
+      <span>累计已修: <span id="totalDone" style="color:green;">0</span> 棵</span>
     </div>
     <div class="stats-content" id="statsContent">
       <table class="stats-table">
@@ -107,10 +125,6 @@
         </thead>
         <tbody id="statsTableBody"></tbody>
       </table>
-      <div class="stats-summary">
-        <span>待办总计: <span id="totalTodo" style="color:red;">0</span> 棵</span>
-        <span>累计已修: <span id="totalDone" style="color:green;">0</span> 棵</span>
-      </div>
     </div>
   </div>
 
@@ -126,6 +140,11 @@
   <div class="modal" id="reportModal">
     <div class="modal-content">
       <div class="modal-title">现场倒树上报</div>
+      <!-- 优化 1：新增上报人姓名输入框 -->
+      <div class="form-group">
+        <label>上报人姓名 <span style="color: red;">*</span></label>
+        <input type="text" id="reporterInput" placeholder="请输入您的名字" required>
+      </div>
       <div class="form-group">
         <label>已选位置坐标</label>
         <input type="text" id="geoInput" readonly style="background: #f5f5f5;">
@@ -181,6 +200,14 @@
       layers: [new AMap.TileLayer(), new AMap.TileLayer.Satellite()]
     });
 
+    // 页面初始化时，读取上一次填写的名字
+    document.addEventListener("DOMContentLoaded", () => {
+      const savedName = localStorage.getItem("reporter_name");
+      if (savedName) {
+        document.getElementById("reporterInput").value = savedName;
+      }
+    });
+
     function getMarkerIcon(severity) {
       let color = '#faad14';
       if (severity === 'high') color = '#f5222d';
@@ -194,13 +221,12 @@
       });
     }
 
-    // 🔄 从 Supabase 云端读取最新数据，并更新地图与大盘
+    // 🔄 从 Supabase 云端读取最新数据
     async function loadAndRenderData() {
       markers.forEach(m => map.remove(m));
       markers = [];
 
       try {
-        // 🌟 使用修改后的 db 变量从 Supabase 拉取所有数据
         const { data: cloudData, error } = await db
           .from('incidents')
           .select('*')
@@ -223,6 +249,7 @@
           const photo = item.photo;
           const lng = item.lng;
           const lat = item.lat;
+          const reporter = item.reporter || "未知上报人"; // 字段：上报人
 
           if (status === 'resolved') {
             zoneStats[zone].done += count;
@@ -239,6 +266,13 @@
                 map: map
               });
 
+              // 优化 3：给地图上的标记点直接附加一个漂浮的信息文本框，实现一眼看完基本信息
+              marker.setLabel({
+                offset: new AMap.Pixel(15, -10), // 位置偏移
+                content: `<div class="custom-marker-label">[${zone}] ${count}棵</div>`,
+                direction: 'right'
+              });
+
               let imageHtml = photo ? `<img class="info-window-img" src="${photo}" onclick="window.open('${photo}')">` : '<p style="color:#999;font-size:12px;margin-top:5px;">(无照片)</p>';
               let severityText = { high: '🔴 紧急', medium: '🟡 中度', low: '🟢 轻微' }[severity] || '🟡 中度';
 
@@ -248,8 +282,9 @@
                     <div style="padding:10px; font-size:13px; line-height:1.6; max-width:240px;">
                       <b>🌲 倒树详情</b><br>
                       区域: <b>${zone}</b><br>
-                      数量: ${count} 棵<br>
+                      数量: <b>${count}</b> 棵<br>
                       程度: ${severityText}<br>
+                      上报人: <b>${reporter}</b><br>
                       时间: ${time}<br>
                       ${imageHtml}
                       <button onclick="resolveIncident('${id}')" style="margin-top:8px; width:100%; padding:5px; background:#52c41a; color:white; border:none; border-radius:4px; cursor:pointer;">已处理(销项)</button>
@@ -315,8 +350,17 @@
       });
     }
 
-    // 提交数据到 Supabase
+    // 提交数据
     async function submitReport() {
+      const reporterName = document.getElementById('reporterInput').value.trim();
+      if (!reporterName) {
+        alert("请输入上报人姓名！");
+        return;
+      }
+      
+      // 记住用户的姓名，下次不用重复输入
+      localStorage.setItem("reporter_name", reporterName);
+
       const submitBtn = document.getElementById('submitBtn');
       const photoInput = document.getElementById('photoInput');
       submitBtn.disabled = true; submitBtn.innerText = '正在上传云端...';
@@ -331,7 +375,6 @@
         const now = new Date();
         const timeStr = `${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')} ${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
 
-        // 🌟 使用修改后的 db 变量向 Supabase 数据库插入数据
         const { error } = await db
           .from('incidents')
           .insert([
@@ -343,7 +386,8 @@
               severity: severity, 
               time: timeStr, 
               photo: photoBase64, 
-              status: 'todo' 
+              status: 'todo',
+              reporter: reporterName // 写入上报人姓名
             }
           ]);
 
@@ -359,11 +403,10 @@
       }
     }
 
-    // 在 Supabase 销项
+    // 销项
     window.resolveIncident = async function(id) {
       if(confirm("确定已处理完毕，要进行销项吗？")) {
         try {
-          // 🌟 使用修改后的 db 变量更新数据状态
           const { error } = await db
             .from('incidents')
             .update({ status: 'resolved' })
@@ -382,9 +425,18 @@
 
     window.toggleStats = function() {
       const content = document.getElementById('statsContent');
+      const summaryTop = document.getElementById('statsSummaryTop');
       const icon = document.getElementById('toggleIcon');
-      content.style.display = content.style.display === 'none' ? 'block' : 'none';
-      icon.innerText = content.style.display === 'none' ? '▲' : '▼';
+      
+      if (content.style.display === 'none') {
+        content.style.display = 'block';
+        summaryTop.style.display = 'flex';
+        icon.innerText = '▼';
+      } else {
+        content.style.display = 'none';
+        summaryTop.style.display = 'none'; // 折叠时同时隐藏顶部总数，让看板保持极简
+        icon.innerText = '▲';
+      }
     }
 
     function closeModal() { document.getElementById('reportModal').style.display = 'none'; document.getElementById('photoInput').value = ''; }
