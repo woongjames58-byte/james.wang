@@ -18,7 +18,7 @@
   <script>
     // ⚠️ 请填入你的 Supabase 配置
     const SUPABASE_URL = "https://hpfgxlxnhnoemktmuksv.supabase.co"; 
-    const SUPABASE_KEY = "sb_publishable_sXHtnCpYoJL4JRrhoVMHGw_OAcakwg3";                  // 👈 填入你的 anon key
+    const SUPABASE_KEY = "YOUR_SUPABASE_ANON_KEY";                  // 👈 填入你的 anon key
     
     const db = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
   </script>
@@ -37,7 +37,7 @@
     /* 📊 统计看板样式 (优化结构：汇总行提到最上方固定) */
     .stats-panel {
       position: absolute; top: 80px; left: 10px; z-index: 999;
-      width: 320px; background: rgba(255, 255, 255, 0.95);
+      width: 340px; background: rgba(255, 255, 255, 0.95);
       border-radius: 8px; box-shadow: 0 2px 12px rgba(0,0,0,0.15);
       overflow: hidden; transition: all 0.3s ease;
       display: flex; flex-direction: column; max-height: 75vh;
@@ -59,7 +59,7 @@
       display: flex; background: #eaeaea; border-bottom: 1px solid #ddd; flex-shrink: 0;
     }
     .tab-btn {
-      flex: 1; padding: 6px; border: none; background: none; font-size: 11px; cursor: pointer; color: #555;
+      flex: 1; padding: 6px 2px; border: none; background: none; font-size: 11px; cursor: pointer; color: #555; white-space: nowrap;
     }
     .tab-btn.active {
       background: #fff; font-weight: bold; color: #1890ff; border-bottom: 2px solid #1890ff;
@@ -70,6 +70,11 @@
     .stats-table th, .stats-table td { padding: 6px 4px; border-bottom: 1px solid #eee; }
     .stats-table th { color: #666; font-weight: bold; position: sticky; top: 0; background: rgba(255,255,255,0.95); z-index: 1; }
     
+    /* 资产看板专属样式扩展 */
+    .asset-kpi-box { display: flex; gap: 5px; margin-bottom: 10px; }
+    .asset-kpi-card { flex: 1; background: #e6f7ff; border: 1px solid #91d5ff; padding: 6px; border-radius: 4px; text-align: center; }
+    .asset-kpi-val { font-size: 14px; font-weight: bold; color: #1890ff; margin-top: 2px; }
+
     /* 联动表格中的行移入效果 */
     .clickable-row { cursor: pointer; transition: background 0.2s; }
     .clickable-row:hover { background: #e6f7ff; }
@@ -145,11 +150,12 @@
       <span>已修: <span id="totalDone" style="color:green; font-weight: bold;">0</span> 棵</span>
     </div>
 
-    <!-- 📊 Tab 切换按钮 -->
+    <!-- 📊 Tab 切换按钮 (新增第四个资产看板入口) -->
     <div class="stats-tabs" id="statsTabs">
       <button class="tab-btn active" onclick="switchTab('zone')">区域分布</button>
       <button class="tab-btn" onclick="switchTab('severityTab')">严重程度</button>
       <button class="tab-btn" onclick="switchTab('reporterTab')">上报贡献榜</button>
+      <button class="tab-btn" onclick="switchTab('assetTab')">🛣️ 空间资产</button>
     </div>
 
     <div class="stats-content" id="statsContent">
@@ -167,7 +173,7 @@
         </table>
       </div>
 
-      <!-- 2. 严重程度点位 Table (支持点击联动) -->
+      <!-- 2. 严重程度点位 Table -->
       <div id="severitySection" style="display: none;">
         <table class="stats-table">
           <thead>
@@ -195,6 +201,32 @@
           <tbody id="reporterTableBody"></tbody>
         </table>
       </div>
+
+      <!-- 4. 🧭 新增扩展：周边路网空间资产面板 -->
+      <div id="assetSection" style="display: none;">
+        <div class="asset-kpi-box">
+          <div class="asset-kpi-card">
+            <div style="color:#666; font-size:10px;">路网线段总数</div>
+            <div class="asset-kpi-val" id="assetTotalCount">0 条</div>
+          </div>
+          <div class="asset-kpi-card" style="background:#f6ffed; border-color:#b7eb8f;">
+            <div style="color:#666; font-size:10px;">测算总长度</div>
+            <div class="asset-kpi-val" id="assetTotalLen" style="color:#52c41a;">0.00 km</div>
+          </div>
+        </div>
+        <table class="stats-table">
+          <thead>
+            <tr>
+              <th>路段 Label 编码</th>
+              <th>类型</th>
+              <th>节点数</th>
+              <th>操作</th>
+            </tr>
+          </thead>
+          <tbody id="assetTableBody"></tbody>
+        </table>
+      </div>
+
     </div>
   </div>
 
@@ -264,6 +296,16 @@
     let activeHighlightMarker = null; // 当前高亮的点标记
     let highlightRing = null; // 高亮光圈对象
     
+    // 💾 直接在此注入您拥有的完整/不完整路网地理要素数据集 (LineString 数组)
+    const MY_ROADS_DATA = [
+      { "coords": [[121.66291, 31.1462], [121.66288, 31.14569], [121.66275, 31.14376]], "label": "SDL_road_01" },
+      { "coords": [[121.66275, 31.14376], [121.66258, 31.14088], [121.66244, 31.13845]], "label": "SDL_road_02" },
+      { "coords": [[121.66012, 31.14798], [121.66171, 31.14787], [121.66314, 31.14777]], "label": "OC3_highspeed_segment1" },
+      { "coords": [[121.66314, 31.14777], [121.66601, 31.14757]], "label": "OC3_highspeed_segment2" }
+      // 💡 可以在这里继续追加你现有的其他具体坐标行...
+    ];
+    let polylineObjects = []; // 存放地图上的高德线段实例
+
     const ALL_ZONES = ["米奇大街", "奇想花园", "探险岛", "宝藏湾", "明日世界", "梦幻世界", "玩具总动员", "疯狂动物城", "后勤及公共区域"];
 
     map = new AMap.Map('map-container', {
@@ -279,7 +321,35 @@
       if (savedName) {
         document.getElementById("reporterInput").value = savedName;
       }
+      initRoadsOnMap(); // 预先在地图上绘制基础路网资产
     });
+
+    // 🛣️ 将你原有的路网线要素在卫星图上渲染出来
+    function initRoadsOnMap() {
+      MY_ROADS_DATA.forEach(road => {
+        let isSDL = road.label.startsWith("SDL");
+        let polyline = new AMap.Polyline({
+          path: road.coords,
+          strokeColor: isSDL ? "#1890ff" : "#722ed1", // 核心区蓝色，外围紫色
+          strokeOpacity: 0.85,
+          strokeWeight: 5,
+          strokeStyle: "solid",
+          map: map
+        });
+        polyline.setExtData(road);
+        
+        // 点击线段联动弹窗提示
+        polyline.on('click', (e) => {
+          let info = new AMap.InfoWindow({
+            content: `<div style="padding:6px;font-size:12px;"><b>🛣️ 空间资产详情</b><br>编号: ${road.label}<br>节点数: ${road.coords.length} 个</div>`,
+            offset: new AMap.Pixel(0, 0)
+          });
+          info.open(map, e.lnglat);
+        });
+
+        polylineObjects.push(polyline);
+      });
+    }
 
     function getMarkerIcon(severity, isLarge = false) {
       let color = '#faad14';
@@ -297,7 +367,6 @@
 
     // 🔄 从 Supabase 云端读取并渲染最新数据
     async function loadAndRenderData() {
-      // 移除原有的高亮和点标记
       removeHighlight();
       markers.forEach(m => map.remove(m));
       markers = [];
@@ -310,7 +379,7 @@
 
         if (error) throw error;
 
-        rawCloudData = cloudData; // 存入本地变量
+        rawCloudData = cloudData; 
 
         let zoneStats = {};
         ALL_ZONES.forEach(zone => { zoneStats[zone] = { todo: 0, done: 0 }; });
@@ -344,7 +413,6 @@
                 map: map
               });
 
-              // 自定义属性绑定
               marker.setExtData({ id: id, severity: severity, lng: lng, lat: lat });
 
               marker.setLabel({
@@ -364,7 +432,6 @@
           }
         });
 
-        // 渲染 1：更新“区域分布”表格
         const tbody = document.getElementById('statsTableBody');
         tbody.innerHTML = '';
         ALL_ZONES.forEach(zone => {
@@ -375,7 +442,6 @@
         document.getElementById('totalTodo').innerText = totalTodoCount;
         document.getElementById('totalDone').innerText = totalDoneCount;
 
-        // 刷新当前活动的 Tab 渲染
         renderCurrentTab();
 
       } catch (error) {
@@ -384,7 +450,6 @@
       }
     }
 
-    // 渲染地图上的信息弹窗与触发点位高亮
     function showInfoWindow(marker, zone, count, severityText, reporter, time, imageHtml, id) {
       highlightMarkerOnMap(marker);
 
@@ -405,25 +470,20 @@
       });
       infoWindow.open(map, marker.getPosition());
       
-      // 当关闭信息窗体时，恢复原样
       infoWindow.on('close', () => {
         removeHighlight();
       });
     }
 
-    // 🌟 在地图上高亮并聚焦某个点位
     function highlightMarkerOnMap(marker) {
-      removeHighlight(); // 清除上一次的高亮状态
-
+      removeHighlight(); 
       activeHighlightMarker = marker;
       const extData = marker.getExtData();
       
-      // 1. 放大该点的 Icon
       marker.setIcon(getMarkerIcon(extData.severity, true));
       marker.setOffset(new AMap.Pixel(-21, -21));
       marker.setzIndex(999);
 
-      // 2. 添加闪烁的 CSS 呼吸光圈
       highlightRing = new AMap.Marker({
         position: marker.getPosition(),
         content: '<div class="highlight-marker-ring"></div>',
@@ -432,11 +492,9 @@
         map: map
       });
 
-      // 3. 将地图视野移到该点并放大
       map.setZoomAndCenter(17, marker.getPosition());
     }
 
-    // 还原点标记外观
     function removeHighlight() {
       if (activeHighlightMarker) {
         const extData = activeHighlightMarker.getExtData();
@@ -451,7 +509,7 @@
       }
     }
 
-    // 📊 Tab 切换逻辑
+    // 📊 Tab 切换扩展逻辑
     window.switchTab = function(tabName) {
       const tabs = document.querySelectorAll('.tab-btn');
       tabs.forEach(btn => btn.classList.remove('active'));
@@ -459,6 +517,7 @@
       document.getElementById('zoneSection').style.display = 'none';
       document.getElementById('severitySection').style.display = 'none';
       document.getElementById('reporterSection').style.display = 'none';
+      document.getElementById('assetSection').style.display = 'none';
 
       if (tabName === 'zone') {
         tabs[0].classList.add('active');
@@ -471,6 +530,10 @@
         tabs[2].classList.add('active');
         document.getElementById('reporterSection').style.display = 'block';
         renderReporterTab();
+      } else if (tabName === 'assetTab') {
+        tabs[3].classList.add('active');
+        document.getElementById('assetSection').style.display = 'block';
+        renderAssetTab(); // 执行资产数据面板逻辑
       }
     }
 
@@ -478,14 +541,12 @@
       const activeTab = document.querySelector('.tab-btn.active');
       if (activeTab.innerText.includes('严重程度')) renderSeverityTab();
       if (activeTab.innerText.includes('上报贡献')) renderReporterTab();
+      if (activeTab.innerText.includes('空间资产')) renderAssetTab();
     }
 
-    // 渲染列表：按严重程度分类（支持点击定位联动）
     function renderSeverityTab() {
       const tbody = document.getElementById('severityTableBody');
       tbody.innerHTML = '';
-
-      // 只列出待处理 ('todo') 的点位
       const todoItems = rawCloudData.filter(item => item.status !== 'resolved' && item.lng && item.lat);
 
       if (todoItems.length === 0) {
@@ -493,7 +554,6 @@
         return;
       }
 
-      // 排序规则：🔴 紧急 > 🟡 中度 > 🟢 轻微
       const severityOrder = { high: 1, medium: 2, low: 3 };
       todoItems.sort((a, b) => severityOrder[a.severity] - severityOrder[b.severity]);
 
@@ -511,34 +571,23 @@
           <td><span style="color:#1890ff; font-weight:bold;">定位 📍</span></td>
         `;
 
-        // 行点击事件：在地图上查找对应的 marker 并突出显示
         row.addEventListener('click', () => {
           const targetMarker = markers.find(m => m.getExtData().id === item.id);
-          if (targetMarker) {
-            // 自动模拟高德 Marker 点击事件
-            targetMarker.emit('click');
-          } else {
-            alert('该位置标记在地图上未找到');
-          }
+          if (targetMarker) targetMarker.emit('click');
         });
-
         tbody.appendChild(row);
       });
     }
 
-    // 渲染列表：上报贡献榜表
     function renderReporterTab() {
       const tbody = document.getElementById('reporterTableBody');
       tbody.innerHTML = '';
-
       let reporterStats = {};
 
       rawCloudData.forEach(item => {
         const name = item.reporter ? item.reporter.trim() : "匿名";
         const count = parseInt(item.count || 0);
-        if (!reporterStats[name]) {
-          reporterStats[name] = { totalTrees: 0, reportsCount: 0 };
-        }
+        if (!reporterStats[name]) { reporterStats[name] = { totalTrees: 0, reportsCount: 0 }; }
         reporterStats[name].totalTrees += count;
         reporterStats[name].reportsCount += 1;
       });
@@ -546,7 +595,7 @@
       const sortedReporters = Object.keys(reporterStats).map(name => ({
         name: name,
         ...reporterStats[name]
-      })).sort((a, b) => b.totalTrees - a.totalTrees); // 按上报棵树高低排序
+      })).sort((a, b) => b.totalTrees - a.totalTrees);
 
       if (sortedReporters.length === 0) {
         tbody.innerHTML = '<tr><td colspan="3" style="text-align:center;color:#999;">无上报记录</td></tr>';
@@ -555,14 +604,56 @@
 
       sortedReporters.forEach((item, index) => {
         const medal = index === 0 ? '🥇 ' : index === 1 ? '🥈 ' : index === 2 ? '🥉 ' : '';
-        tbody.innerHTML += `
-          <tr>
-            <td>${medal}<b>${item.name}</b></td>
-            <td style="color:#1890ff; font-weight:bold;">${item.totalTrees} 棵</td>
-            <td>${item.reportsCount} 次</td>
-          </tr>
-        `;
+        tbody.innerHTML += `<tr><td>${medal}<b>${item.name}</b></td><td style="color:#1890ff; font-weight:bold;">${item.totalTrees} 棵</td><td>${item.reportsCount} 次</td></tr>`;
       });
+    }
+
+    // 📊 🧭 新增渲染函数：处理路网面板指标计算与列表联动
+    function renderAssetTab() {
+      const tbody = document.getElementById('assetTableBody');
+      tbody.innerHTML = '';
+      
+      let totalCount = MY_ROADS_DATA.length;
+      let totalLengthKm = 0;
+
+      document.getElementById('assetTotalCount').innerText = totalCount + ' 条';
+
+      MY_ROADS_DATA.forEach((road) => {
+        // 利用高德自带几何库计算每条折线真实地球表面地理长度
+        let pathArr = road.coords.map(c => new AMap.LngLat(c[0], c[1]));
+        let lengthMeters = AMap.GeometryUtil.distanceOfLine(pathArr); 
+        totalLengthKm += lengthMeters / 1000;
+
+        let typeText = road.label.startsWith("SDL") ? "核心区" : "外围干道";
+        
+        let row = document.createElement('tr');
+        row.className = 'clickable-row';
+        row.innerHTML = `
+          <td style="font-family:monospace;">${road.label}</td>
+          <td><span style="color:${road.label.startsWith("SDL") ? '#1890ff':'#722ed1'}">${typeText}</span></td>
+          <td>${road.coords.length}</td>
+          <td><span style="color:#1890ff; font-weight:bold;">追踪 👁️</span></td>
+        `;
+
+        // 点击资产列表行：地图自动定位到该线段的起点，并居中放大闪烁提示
+        row.addEventListener('click', () => {
+          let startCoord = road.coords[0];
+          map.setZoomAndCenter(16, [startCoord[0], startCoord[1]]);
+          
+          // 闪烁线段做高亮提示
+          let targetPoly = polylineObjects.find(p => p.getExtData().label === road.label);
+          if (targetPoly) {
+            targetPoly.setOptions({ strokeWeight: 9, strokeColor: '#ff4d4f' });
+            setTimeout(() => {
+              targetPoly.setOptions({ strokeWeight: 5, strokeColor: road.label.startsWith("SDL") ? "#1890ff" : "#722ed1" });
+            }, 1000);
+          }
+        });
+
+        tbody.appendChild(row);
+      });
+
+      document.getElementById('assetTotalLen').innerText = totalLengthKm.toFixed(2) + ' km';
     }
 
     function startReport() {
@@ -601,16 +692,11 @@
       });
     }
 
-    // 提交数据
     async function submitReport() {
       const reporterName = document.getElementById('reporterInput').value.trim();
-      if (!reporterName) {
-        alert("请输入上报人姓名！");
-        return;
-      }
+      if (!reporterName) { alert("请输入上报人姓名！"); return; }
       
       localStorage.setItem("reporter_name", reporterName);
-
       const submitBtn = document.getElementById('submitBtn');
       const photoInput = document.getElementById('photoInput');
       submitBtn.disabled = true; submitBtn.innerText = '正在上传云端...';
@@ -642,7 +728,6 @@
           ]);
 
         if (error) throw error;
-
         await loadAndRenderData(); 
         closeModal();
         alert('上传成功！所有人已同步此险情。');
@@ -653,7 +738,6 @@
       }
     }
 
-    // 销项
     window.resolveIncident = async function(id) {
       if(confirm("确定已处理完毕，要进行销项吗？")) {
         try {
@@ -663,7 +747,6 @@
             .eq('id', id);
 
           if (error) throw error;
-          
           map.clearInfoWindow(); 
           await loadAndRenderData();
           alert('销项成功，云端已实时同步！');
@@ -694,7 +777,6 @@
 
     function closeModal() { document.getElementById('reportModal').style.display = 'none'; document.getElementById('photoInput').value = ''; }
 
-    // 首次载入
     loadAndRenderData();
   </script>
 </body>
