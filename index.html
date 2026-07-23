@@ -5,23 +5,24 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
   <title>迪士尼倒树应急地图 (多人共享版)</title>
   
-  <!-- 1. 引入高德地图 JS API -->
+  <!-- 1. 配置高德地图安全密钥 -->
   <script type="text/javascript">
     window._AMapSecurityConfig = {
       securityJsCode: '87f30e10906fa7218d780a9a179c69f89', // 你的高德安全密钥
     }
   </script>
-  <script type="text/javascript" src="https://webapi.amap.com/maps?v=2.0&key=ecc7bff9b574a80ad34e4d51bab69aca"></script>
   
   <!-- 2. 引入 Supabase 官方云数据库 SDK -->
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <script>
-    // ⚠️ 请填入你的 Supabase 配置
     const SUPABASE_URL = "https://hpfgxlxnhnoemktmuksv.supabase.co"; 
-    const SUPABASE_KEY = "sb_publishable_sXHtnCpYoJL4JRrhoVMHGw_OAcakwg3";                  // 👈 填入你的 anon key
+    const SUPABASE_KEY = "sb_publishable_sXHtnCpYoJL4JRrhoVMHGw_OAcakwg3";
     
     const db = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
   </script>
+
+  <!-- 3. 异步加载高德地图 JS API (通过 onAMapLoad 回调初始化) -->
+  <script type="text/javascript" src="https://webapi.amap.com/maps?v=2.0&key=ecc7bff9b574a80ad34e4d51bab69aca&callback=onAMapLoad"></script>
 
   <style>
     * { box-sizing: border-box; margin: 0; padding: 0; }
@@ -34,7 +35,7 @@
     }
     .header h1 { font-size: 16px; color: #333; }
 
-    /* 📊 统计看板样式 (优化结构：汇总行提到最上方固定) */
+    /* 📊 统计看板样式 */
     .stats-panel {
       position: absolute; top: 80px; left: 10px; z-index: 999;
       width: 340px; background: rgba(255, 255, 255, 0.95);
@@ -150,7 +151,7 @@
       <span>已修: <span id="totalDone" style="color:green; font-weight: bold;">0</span> 棵</span>
     </div>
 
-    <!-- 📊 Tab 切换按钮 (新增第四个资产看板入口) -->
+    <!-- 📊 Tab 切换按钮 -->
     <div class="stats-tabs" id="statsTabs">
       <button class="tab-btn active" onclick="switchTab('zone')">区域分布</button>
       <button class="tab-btn" onclick="switchTab('severityTab')">严重程度</button>
@@ -202,7 +203,7 @@
         </table>
       </div>
 
-      <!-- 4. 🧭 新增扩展：周边路网空间资产面板 -->
+      <!-- 4. 周边路网空间资产面板 -->
       <div id="assetSection" style="display: none;">
         <div class="asset-kpi-box">
           <div class="asset-kpi-card">
@@ -292,45 +293,46 @@
     let markers = [];
     let tempLngLat = null;
     let isSelecting = false;
-    let rawCloudData = []; // 缓存全局云端数据，方便 Tab 切换计算
-    let activeHighlightMarker = null; // 当前高亮的点标记
-    let highlightRing = null; // 高亮光圈对象
+    let rawCloudData = []; 
+    let activeHighlightMarker = null; 
+    let highlightRing = null; 
     
-    // 💾 直接在此注入您拥有的完整/不完整路网地理要素数据集 (LineString 数组)
+    // 💾 路网地理要素数据集 (LineString 数组)
     const MY_ROADS_DATA = [
       { "coords": [[121.66291, 31.1462], [121.66288, 31.14569], [121.66275, 31.14376]], "label": "SDL_road_01" },
       { "coords": [[121.66275, 31.14376], [121.66258, 31.14088], [121.66244, 31.13845]], "label": "SDL_road_02" },
       { "coords": [[121.66012, 31.14798], [121.66171, 31.14787], [121.66314, 31.14777]], "label": "OC3_highspeed_segment1" },
       { "coords": [[121.66314, 31.14777], [121.66601, 31.14757]], "label": "OC3_highspeed_segment2" }
-      // 💡 可以在这里继续追加你现有的其他具体坐标行...
     ];
-    let polylineObjects = []; // 存放地图上的高德线段实例
+    let polylineObjects = []; 
 
     const ALL_ZONES = ["米奇大街", "奇想花园", "探险岛", "宝藏湾", "明日世界", "梦幻世界", "玩具总动员", "疯狂动物城", "后勤及公共区域"];
 
-    map = new AMap.Map('map-container', {
-      zoom: 15,
-      center: [121.6578, 31.1436],
-      viewMode: '3D',
-      layers: [new AMap.TileLayer(), new AMap.TileLayer.Satellite()]
-    });
+    // 🚀 高德地图 API 异步加载完成后的回调初始化函数
+    function onAMapLoad() {
+      map = new AMap.Map('map-container', {
+        zoom: 15,
+        center: [121.6578, 31.1436],
+        viewMode: '3D',
+        layers: [new AMap.TileLayer(), new AMap.TileLayer.Satellite()]
+      });
 
-    // 页面初始化时，读取上一次填写的名字
-    document.addEventListener("DOMContentLoaded", () => {
+      // 初始化读取缓存数据与地图渲染
       const savedName = localStorage.getItem("reporter_name");
       if (savedName) {
         document.getElementById("reporterInput").value = savedName;
       }
-      initRoadsOnMap(); // 预先在地图上绘制基础路网资产
-    });
+      initRoadsOnMap(); 
+      loadAndRenderData();
+    }
 
-    // 🛣️ 将你原有的路网线要素在卫星图上渲染出来
+    // 🛣️ 将路网线要素在地图上渲染
     function initRoadsOnMap() {
       MY_ROADS_DATA.forEach(road => {
         let isSDL = road.label.startsWith("SDL");
         let polyline = new AMap.Polyline({
           path: road.coords,
-          strokeColor: isSDL ? "#1890ff" : "#722ed1", // 核心区蓝色，外围紫色
+          strokeColor: isSDL ? "#1890ff" : "#722ed1",
           strokeOpacity: 0.85,
           strokeWeight: 5,
           strokeStyle: "solid",
@@ -338,7 +340,6 @@
         });
         polyline.setExtData(road);
         
-        // 点击线段联动弹窗提示
         polyline.on('click', (e) => {
           let info = new AMap.InfoWindow({
             content: `<div style="padding:6px;font-size:12px;"><b>🛣️ 空间资产详情</b><br>编号: ${road.label}<br>节点数: ${road.coords.length} 个</div>`,
@@ -356,7 +357,7 @@
       if (severity === 'high') color = '#f5222d';
       if (severity === 'low') color = '#52c41a';
 
-      const size = isLarge ? 42 : 30; // 被选中时图标放大
+      const size = isLarge ? 42 : 30;
       const svg = `<svg viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg" width="${size}" height="${size}"><circle cx="50" cy="50" r="35" fill="${color}" stroke="#ffffff" stroke-width="8" /><circle cx="50" cy="50" r="10" fill="#ffffff" /></svg>`;
       return new AMap.Icon({
         size: new AMap.Size(size, size),
@@ -533,12 +534,13 @@
       } else if (tabName === 'assetTab') {
         tabs[3].classList.add('active');
         document.getElementById('assetSection').style.display = 'block';
-        renderAssetTab(); // 执行资产数据面板逻辑
+        renderAssetTab(); 
       }
     }
 
     function renderCurrentTab() {
       const activeTab = document.querySelector('.tab-btn.active');
+      if (!activeTab) return;
       if (activeTab.innerText.includes('严重程度')) renderSeverityTab();
       if (activeTab.innerText.includes('上报贡献')) renderReporterTab();
       if (activeTab.innerText.includes('空间资产')) renderAssetTab();
@@ -608,7 +610,6 @@
       });
     }
 
-    // 📊 🧭 新增渲染函数：处理路网面板指标计算与列表联动
     function renderAssetTab() {
       const tbody = document.getElementById('assetTableBody');
       tbody.innerHTML = '';
@@ -619,7 +620,6 @@
       document.getElementById('assetTotalCount').innerText = totalCount + ' 条';
 
       MY_ROADS_DATA.forEach((road) => {
-        // 利用高德自带几何库计算每条折线真实地球表面地理长度
         let pathArr = road.coords.map(c => new AMap.LngLat(c[0], c[1]));
         let lengthMeters = AMap.GeometryUtil.distanceOfLine(pathArr); 
         totalLengthKm += lengthMeters / 1000;
@@ -635,12 +635,10 @@
           <td><span style="color:#1890ff; font-weight:bold;">追踪 👁️</span></td>
         `;
 
-        // 点击资产列表行：地图自动定位到该线段的起点，并居中放大闪烁提示
         row.addEventListener('click', () => {
           let startCoord = road.coords[0];
           map.setZoomAndCenter(16, [startCoord[0], startCoord[1]]);
           
-          // 闪烁线段做高亮提示
           let targetPoly = polylineObjects.find(p => p.getExtData().label === road.label);
           if (targetPoly) {
             targetPoly.setOptions({ strokeWeight: 9, strokeColor: '#ff4d4f' });
@@ -776,8 +774,6 @@
     }
 
     function closeModal() { document.getElementById('reportModal').style.display = 'none'; document.getElementById('photoInput').value = ''; }
-
-    loadAndRenderData();
   </script>
 </body>
 </html>
