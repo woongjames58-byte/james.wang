@@ -3,777 +3,510 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-  <title>迪士尼倒树应急地图 (多人共享版)</title>
-  
-  <!-- 1. 配置高德地图安全密钥 -->
-  <script type="text/javascript">
-    window._AMapSecurityConfig = {
-      securityJsCode: '87f30e10906fa7218d780a9a179c69f89', // 你的高德安全密钥
-    }
+  <title>台风后树木风险四表盘地图</title>
+  <script>
+    window._AMapSecurityConfig = { securityJsCode: "87f30e10906fa7218d780a9a179c69f89" };
   </script>
-  
-  <!-- 2. 引入 Supabase 官方云数据库 SDK -->
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <script>
-    const SUPABASE_URL = "https://hpfgxlxnhnoemktmuksv.supabase.co"; 
+    const SUPABASE_URL = "https://hpfgxlxnhnoemktmuksv.supabase.co";
     const SUPABASE_KEY = "sb_publishable_sXHtnCpYoJL4JRrhoVMHGw_OAcakwg3";
-    
     const db = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
   </script>
-
-  <!-- 3. 异步加载高德地图 JS API (通过 onAMapLoad 回调初始化) -->
-  <script type="text/javascript" src="https://webapi.amap.com/maps?v=2.0&key=ecc7bff9b574a80ad34e4d51bab69aca&callback=onAMapLoad"></script>
-
   <style>
-    * { box-sizing: border-box; margin: 0; padding: 0; }
-    html, body, #map-container { width: 100%; height: 100%; overflow: hidden; font-family: -apple-system, sans-serif; }
-    
-    .header {
-      position: absolute; top: 10px; left: 10px; right: 10px; z-index: 999;
-      background: rgba(255, 255, 255, 0.95); padding: 12px; border-radius: 8px;
-      box-shadow: 0 2px 10px rgba(0,0,0,0.15); text-align: center;
+    :root {
+      --blue:#1677ff; --navy:#17324d; --green:#27ae60; --orange:#f39c12;
+      --red:#e74c3c; --muted:#667085; --panel:rgba(255,255,255,.97);
     }
-    .header h1 { font-size: 16px; color: #333; }
-
-    /* 📊 统计看板样式 */
-    .stats-panel {
-      position: absolute; top: 80px; left: 10px; z-index: 999;
-      width: 340px; background: rgba(255, 255, 255, 0.95);
-      border-radius: 8px; box-shadow: 0 2px 12px rgba(0,0,0,0.15);
-      overflow: hidden; transition: all 0.3s ease;
-      display: flex; flex-direction: column; max-height: 75vh;
+    * { box-sizing:border-box; margin:0; padding:0; }
+    html,body,#map-container { width:100%; height:100%; overflow:hidden; font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","Microsoft YaHei",sans-serif; }
+    button,input,select { font:inherit; }
+    .topbar {
+      position:absolute; z-index:900; top:12px; left:50%; transform:translateX(-50%);
+      width:min(760px,calc(100% - 24px)); padding:10px 16px; border-radius:12px;
+      background:rgba(18,40,62,.92); color:#fff; box-shadow:0 6px 22px rgba(0,0,0,.22);
+      display:flex; justify-content:space-between; align-items:center; gap:12px;
     }
-    .stats-header {
-      background: #1890ff; color: white; padding: 10px 12px;
-      font-size: 13px; font-weight: bold; display: flex;
-      justify-content: space-between; align-items: center; cursor: pointer;
-      flex-shrink: 0;
+    .topbar h1 { font-size:17px; }
+    .topbar small { opacity:.75; font-size:11px; white-space:nowrap; }
+    .dashboard {
+      position:absolute; z-index:900; left:12px; top:76px; width:390px; max-height:calc(100vh - 155px);
+      background:var(--panel); border-radius:12px; box-shadow:0 6px 24px rgba(0,0,0,.2);
+      display:flex; flex-direction:column; overflow:hidden;
     }
-    .stats-summary-top {
-      background: #f5f5f5; padding: 8px 10px; border-bottom: 1px solid #ddd;
-      font-size: 12px; font-weight: bold; display: flex; justify-content: space-between;
-      flex-shrink: 0;
+    .dashboard-head {
+      padding:11px 13px; background:var(--navy); color:#fff; display:flex;
+      justify-content:space-between; align-items:center; cursor:pointer;
     }
-    
-    /* 看板内 Tab 切换样式 */
-    .stats-tabs {
-      display: flex; background: #eaeaea; border-bottom: 1px solid #ddd; flex-shrink: 0;
+    .dashboard-head h2 { font-size:14px; }
+    .tabs { display:grid; grid-template-columns:repeat(4,1fr); border-bottom:1px solid #e5e7eb; background:#f4f6f8; }
+    .tab { border:0; background:transparent; padding:9px 3px; font-size:11px; color:#475467; cursor:pointer; border-bottom:3px solid transparent; }
+    .tab.active { color:var(--blue); background:#fff; border-bottom-color:var(--blue); font-weight:700; }
+    .kpis { display:grid; grid-template-columns:repeat(3,1fr); gap:7px; padding:10px 10px 5px; }
+    .kpi { border:1px solid #e4e7ec; border-radius:8px; text-align:center; padding:7px 3px; background:#fff; }
+    .kpi span { display:block; font-size:10px; color:var(--muted); }
+    .kpi strong { display:block; margin-top:3px; font-size:16px; color:var(--navy); }
+    .dashboard-note { margin:4px 10px 7px; padding:7px 9px; background:#fff8e6; color:#7a5200; border-radius:7px; font-size:10px; line-height:1.45; }
+    .toolbar { display:flex; gap:6px; padding:0 10px 8px; }
+    .search { flex:1; min-width:0; padding:7px 9px; border:1px solid #d0d5dd; border-radius:7px; font-size:12px; }
+    .small-btn { border:0; border-radius:7px; background:#edf4ff; color:var(--blue); padding:6px 9px; cursor:pointer; font-size:11px; }
+    .table-wrap { overflow:auto; flex:1; min-height:80px; }
+    table { width:100%; border-collapse:collapse; font-size:11px; }
+    th { position:sticky; top:0; z-index:1; background:#f8fafc; color:#475467; text-align:left; padding:7px 8px; border-bottom:1px solid #e4e7ec; }
+    td { padding:7px 8px; border-bottom:1px solid #eef1f4; vertical-align:middle; }
+    tr.data-row { cursor:pointer; }
+    tr.data-row:hover { background:#edf6ff; }
+    code { font-size:10px; color:#344054; }
+    .badge { display:inline-block; border-radius:99px; padding:2px 6px; font-size:10px; background:#eef2f6; color:#475467; }
+    .dot { width:10px; height:10px; border-radius:50%; display:inline-block; margin-right:5px; vertical-align:-1px; }
+    .collapsed .tabs,.collapsed .dashboard-body { display:none; }
+    .actions {
+      position:absolute; z-index:900; bottom:18px; left:50%; transform:translateX(-50%);
+      display:flex; gap:8px; width:min(430px,calc(100% - 24px));
     }
-    .tab-btn {
-      flex: 1; padding: 6px 2px; border: none; background: none; font-size: 11px; cursor: pointer; color: #555; white-space: nowrap;
+    .action-btn { flex:1; border:0; color:#fff; background:var(--blue); padding:11px; border-radius:9px; font-weight:700; box-shadow:0 4px 15px rgba(0,0,0,.18); cursor:pointer; }
+    .action-btn.secondary { flex:0 0 auto; background:var(--green); }
+    .legend {
+      position:absolute; z-index:850; right:12px; bottom:76px; background:rgba(255,255,255,.94);
+      border-radius:9px; padding:8px 10px; box-shadow:0 3px 14px rgba(0,0,0,.14); font-size:10px; line-height:1.8;
     }
-    .tab-btn.active {
-      background: #fff; font-weight: bold; color: #1890ff; border-bottom: 2px solid #1890ff;
+    .modal { display:none; position:fixed; inset:0; z-index:1200; background:rgba(0,0,0,.5); align-items:center; justify-content:center; }
+    .modal-content { width:min(360px,88vw); max-height:90vh; overflow:auto; background:#fff; border-radius:13px; padding:18px; }
+    .modal-title { text-align:center; font-weight:700; margin-bottom:13px; }
+    .form-group { margin-bottom:10px; }
+    .form-group label { display:block; color:#475467; font-size:12px; margin-bottom:4px; }
+    .form-group input,.form-group select { width:100%; border:1px solid #d0d5dd; border-radius:6px; padding:8px; }
+    .modal-btns { display:flex; gap:8px; margin-top:14px; }
+    .modal-btns button { flex:1; border:0; border-radius:7px; padding:9px; cursor:pointer; }
+    .cancel { background:#eef1f4; } .submit { background:var(--blue); color:#fff; }
+    .map-label { background:rgba(16,35,52,.84); color:#fff; border-radius:4px; padding:2px 5px; font-size:9px; white-space:nowrap; }
+    .amap-marker-label { border:0!important; background:transparent!important; }
+    .empty { padding:24px; text-align:center; color:#98a2b3; }
+    @media(max-width:650px) {
+      .topbar small { display:none; }
+      .dashboard { left:8px; top:68px; width:calc(100% - 16px); max-height:52vh; }
+      .topbar { top:8px; } .topbar h1 { font-size:14px; }
+      .legend { display:none; }
     }
-
-    .stats-content { padding: 8px 10px; overflow-y: auto; font-size: 12px; flex-grow: 1; }
-    .stats-table { width: 100%; border-collapse: collapse; text-align: left; margin-bottom: 10px; }
-    .stats-table th, .stats-table td { padding: 6px 4px; border-bottom: 1px solid #eee; }
-    .stats-table th { color: #666; font-weight: bold; position: sticky; top: 0; background: rgba(255,255,255,0.95); z-index: 1; }
-    
-    /* 资产看板专属样式扩展 */
-    .asset-kpi-box { display: flex; gap: 5px; margin-bottom: 10px; }
-    .asset-kpi-card { flex: 1; background: #e6f7ff; border: 1px solid #91d5ff; padding: 6px; border-radius: 4px; text-align: center; }
-    .asset-kpi-val { font-size: 14px; font-weight: bold; color: #1890ff; margin-top: 2px; }
-
-    /* 联动表格中的行移入效果 */
-    .clickable-row { cursor: pointer; transition: background 0.2s; }
-    .clickable-row:hover { background: #e6f7ff; }
-
-    /* 🏷️ 地图点标记上的直观文本标签 */
-    .amap-marker-label {
-      border: none !important; background: transparent !important;
-    }
-    .custom-marker-label {
-      background: rgba(0, 0, 0, 0.75); color: #fff; padding: 2px 6px;
-      border-radius: 4px; font-size: 10px; white-space: nowrap;
-      box-shadow: 0 1px 4px rgba(0,0,0,0.3); pointer-events: none;
-      border: 1px solid rgba(255,255,255,0.2);
-    }
-
-    /* 📍 突出显示的高亮动画环 */
-    @keyframes pulse {
-      0% { transform: scale(1); opacity: 1; }
-      100% { transform: scale(2.2); opacity: 0; }
-    }
-    .highlight-marker-ring {
-      position: absolute; width: 30px; height: 30px;
-      border: 3px solid #1890ff; border-radius: 50%;
-      animation: pulse 1.2s infinite ease-out; pointer-events: none;
-    }
-
-    /* 📍 控制按钮 */
-    .action-panel {
-      position: absolute; bottom: 20px; left: 50%; transform: translateX(-50%); z-index: 999;
-      width: 90%; max-width: 400px; display: flex; gap: 10px;
-    }
-    .btn {
-      flex: 3; background: #1890ff; color: white; border: none; padding: 12px;
-      font-size: 16px; font-weight: bold; border-radius: 6px; cursor: pointer; box-shadow: 0 4px 15px rgba(0,0,0,0.2);
-    }
-    .btn:active { background: #096dd9; }
-    .btn-refresh {
-      flex: 1; background: #52c41a; color: white; border: none; padding: 12px;
-      font-size: 14px; font-weight: bold; border-radius: 6px; cursor: pointer; box-shadow: 0 4px 15px rgba(0,0,0,0.2);
-    }
-    
-    /* 弹窗样式 */
-    .modal {
-      display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%;
-      background: rgba(0,0,0,0.5); z-index: 1000; align-items: center; justify-content: center;
-    }
-    .modal-content { background: white; padding: 20px; border-radius: 12px; width: 85%; max-width: 340px; }
-    .modal-title { font-size: 16px; font-weight: bold; margin-bottom: 15px; text-align: center; }
-    .form-group { margin-bottom: 12px; }
-    .form-group label { display: block; font-size: 14px; margin-bottom: 5px; color: #666; }
-    .form-group input, .form-group select { width: 100%; padding: 8px; border: 1px solid #ccc; border-radius: 4px; font-size: 14px; }
-    .modal-btns { display: flex; gap: 10px; margin-top: 15px; }
-    .btn-cancel { background: #f0f0f0; color: #333; flex: 1; border: none; padding: 10px; border-radius: 6px; cursor: pointer; }
-    .btn-submit { background: #1890ff; color: white; flex: 1; border: none; padding: 10px; border-radius: 6px; cursor: pointer; }
-    .info-window-img { width: 100%; max-height: 150px; object-fit: cover; border-radius: 4px; margin-top: 8px; cursor: pointer; }
   </style>
 </head>
 <body>
-
-  <div class="header">
-    <h1>迪士尼倒树应急地图 (多人共享版)</h1>
-  </div>
-
-  <!-- 📊 实时数据统计看板 -->
-  <div class="stats-panel" id="statsPanel">
-    <div class="stats-header" onclick="toggleStats()">
-      <span>📊 倒树数据多维看板</span>
-      <span id="toggleIcon">▼</span>
-    </div>
-    
-    <div class="stats-summary-top" id="statsSummaryTop">
-      <span>待办: <span id="totalTodo" style="color:red; font-weight: bold;">0</span> 棵</span>
-      <span>已修: <span id="totalDone" style="color:green; font-weight: bold;">0</span> 棵</span>
-    </div>
-
-    <!-- 📊 Tab 切换按钮 -->
-    <div class="stats-tabs" id="statsTabs">
-      <button class="tab-btn active" onclick="switchTab('zone')">区域分布</button>
-      <button class="tab-btn" onclick="switchTab('severityTab')">严重程度</button>
-      <button class="tab-btn" onclick="switchTab('reporterTab')">上报贡献榜</button>
-      <button class="tab-btn" onclick="switchTab('assetTab')">🛣️ 空间资产</button>
-    </div>
-
-    <div class="stats-content" id="statsContent">
-      <!-- 1. 区域统计 Table -->
-      <div id="zoneSection">
-        <table class="stats-table">
-          <thead>
-            <tr>
-              <th>区域</th>
-              <th>待处理</th>
-              <th>已修复</th>
-            </tr>
-          </thead>
-          <tbody id="statsTableBody"></tbody>
-        </table>
-      </div>
-
-      <!-- 2. 严重程度点位 Table -->
-      <div id="severitySection" style="display: none;">
-        <table class="stats-table">
-          <thead>
-            <tr>
-              <th>级别</th>
-              <th>区域</th>
-              <th>数量</th>
-              <th>操作</th>
-            </tr>
-          </thead>
-          <tbody id="severityTableBody"></tbody>
-        </table>
-      </div>
-
-      <!-- 3. 上报贡献人 Table -->
-      <div id="reporterSection" style="display: none;">
-        <table class="stats-table">
-          <thead>
-            <tr>
-              <th>上报人</th>
-              <th>总棵数</th>
-              <th>上报次数</th>
-            </tr>
-          </thead>
-          <tbody id="reporterTableBody"></tbody>
-        </table>
-      </div>
-
-      <!-- 4. 周边路网空间资产面板 -->
-      <div id="assetSection" style="display: none;">
-        <div class="asset-kpi-box">
-          <div class="asset-kpi-card">
-            <div style="color:#666; font-size:10px;">路网线段总数</div>
-            <div class="asset-kpi-val" id="assetTotalCount">0 条</div>
-          </div>
-          <div class="asset-kpi-card" style="background:#f6ffed; border-color:#b7eb8f;">
-            <div style="color:#666; font-size:10px;">测算总长度</div>
-            <div class="asset-kpi-val" id="assetTotalLen" style="color:#52c41a;">0.00 km</div>
-          </div>
-        </div>
-        <table class="stats-table">
-          <thead>
-            <tr>
-              <th>路段 Label 编码</th>
-              <th>类型</th>
-              <th>节点数</th>
-              <th>操作</th>
-            </tr>
-          </thead>
-          <tbody id="assetTableBody"></tbody>
-        </table>
-      </div>
-
-    </div>
-  </div>
-
   <div id="map-container"></div>
+  <header class="topbar">
+    <h1>🌳 台风后树木风险四表盘地图</h1>
+    <small>道路、园区主路、重要设施与工单热力</small>
+  </header>
 
-  <!-- 📍 底部控制区 -->
-  <div class="action-panel">
-    <button class="btn" onclick="startReport()">📍 拍照/选点上报</button>
-    <button class="btn-refresh" onclick="loadAndRenderData()">🔄 刷新</button>
+  <section class="dashboard" id="dashboardPanel">
+    <div class="dashboard-head" onclick="togglePanel()">
+      <h2 id="panelTitle">表盘 1 · 度假区道路恢复</h2><span id="collapseIcon">▼</span>
+    </div>
+    <div class="tabs">
+      <button class="tab active" data-tab="dashboard1" onclick="switchDashboard('dashboard1')">① 度假区道路</button>
+      <button class="tab" data-tab="dashboard2" onclick="switchDashboard('dashboard2')">② 乐园主路</button>
+      <button class="tab" data-tab="dashboard3" onclick="switchDashboard('dashboard3')">③ 重要设施</button>
+      <button class="tab" data-tab="dashboard4" onclick="switchDashboard('dashboard4')">④ 工单热力</button>
+    </div>
+    <div class="dashboard-body">
+      <div class="kpis">
+        <div class="kpi"><span id="kpi1Label">道路数</span><strong id="kpi1">0</strong></div>
+        <div class="kpi"><span>总损失树木</span><strong id="kpiTrees">0</strong></div>
+        <div class="kpi"><span id="kpi3Label">有工单位置</span><strong id="kpi3">0</strong></div>
+      </div>
+      <div class="dashboard-note" id="dashboardNote"></div>
+      <div class="toolbar">
+        <input id="searchInput" class="search" placeholder="搜索 Location 或 Location Code" oninput="renderTable()">
+        <button class="small-btn" onclick="fitCurrentLayer()">显示全部</button>
+      </div>
+      <div class="table-wrap" id="tableWrap">
+        <table>
+          <thead><tr id="tableHead"></tr></thead>
+          <tbody id="dashboardRows"></tbody>
+        </table>
+      </div>
+    </div>
+  </section>
+
+  <div class="legend" id="legend"></div>
+  <div class="actions">
+    <button class="action-btn" onclick="startReport()">📍 拍照 / 选点上报</button>
+    <button class="action-btn secondary" onclick="loadIncidents()">↻ 刷新</button>
   </div>
 
-  <!-- 上报弹窗 -->
   <div class="modal" id="reportModal">
     <div class="modal-content">
       <div class="modal-title">现场倒树上报</div>
-      <div class="form-group">
-        <label>上报人姓名 <span style="color: red;">*</span></label>
-        <input type="text" id="reporterInput" placeholder="请输入您的名字" required>
-      </div>
-      <div class="form-group">
-        <label>已选位置坐标</label>
-        <input type="text" id="geoInput" readonly style="background: #f5f5f5;">
-      </div>
-      <div class="form-group">
-        <label>所属主题园区</label>
-        <select id="areaZone">
-          <option value="米奇大街">米奇大街 (Mickey Avenue)</option>
-          <option value="奇想花园">奇想花园 (Gardens of Imagination)</option>
-          <option value="探险岛">探险岛 (Adventure Isle)</option>
-          <option value="宝藏湾">宝藏湾 (Treasure Cove)</option>
-          <option value="明日世界">明日世界 (Tomorrowland)</option>
-          <option value="梦幻世界">梦幻世界 (Fantasyland)</option>
-          <option value="玩具总动员">皮克斯玩具总动员 (Toy Story Land)</option>
-          <option value="疯狂动物城">疯狂动物城 (Zootopia)</option>
-          <option value="后勤及公共区域">周边/后勤/公共区域</option>
+      <div class="form-group"><label>上报人姓名 *</label><input id="reporterInput" type="text"></div>
+      <div class="form-group"><label>已选坐标</label><input id="geoInput" readonly></div>
+      <div class="form-group"><label>归属表盘 *</label>
+        <select id="reportDashboard" onchange="handleReportDashboardChange()">
+          <option value="dashboard1">1 · 度假区道路</option>
+          <option value="dashboard2">2 · 乐园道路</option>
+          <option value="dashboard3">3 · 重要设施</option>
         </select>
       </div>
-      <div class="form-group">
-        <label>倒树数量 (棵)</label>
-        <input type="number" id="treeCount" value="1" min="1">
+      <div class="form-group"><label>对应 Location *</label>
+        <select id="reportLocation"></select>
+        <small id="nearestHint" style="display:block;color:#667085;margin-top:4px"></small>
       </div>
-      <div class="form-group">
-        <label>严重程度</label>
-        <select id="severity">
-          <option value="high">🔴 紧急 (阻断交通)</option>
-          <option value="medium" selected>🟡 中度 (部分妨碍)</option>
-          <option value="low">🟢 轻微 (绿化带内)</option>
-        </select>
+      <div class="form-group"><label>倒树数量（棵）</label><input id="treeCount" type="number" value="1" min="1"></div>
+      <div class="form-group"><label>严重程度</label>
+        <select id="severity"><option value="high">🔴 紧急</option><option value="medium" selected>🟡 中度</option><option value="low">🟢 轻微</option></select>
       </div>
-      <div class="form-group">
-        <label>现场照片 (可直接拍照)</label>
-        <input type="file" id="photoInput" accept="image/*">
-      </div>
-      <div class="modal-btns">
-        <button class="btn-cancel" onclick="closeModal()">取消</button>
-        <button class="btn-submit" id="submitBtn" onclick="submitReport()">提交</button>
-      </div>
+      <div class="form-group"><label>现场照片</label><input id="photoInput" type="file" accept="image/*"></div>
+      <div class="modal-btns"><button class="cancel" onclick="closeModal()">取消</button><button class="submit" id="submitBtn" onclick="submitReport()">提交</button></div>
     </div>
   </div>
 
   <script>
-    let map;
-    let markers = [];
-    let tempLngLat = null;
-    let isSelecting = false;
-    let rawCloudData = []; 
-    let activeHighlightMarker = null; 
-    let highlightRing = null; 
-    
-    // 💾 路网地理要素数据集 (LineString 数组)
-    const MY_ROADS_DATA = [
-      { "coords": [[121.66291, 31.1462], [121.66288, 31.14569], [121.66275, 31.14376]], "label": "SDL_road_01" },
-      { "coords": [[121.66275, 31.14376], [121.66258, 31.14088], [121.66244, 31.13845]], "label": "SDL_road_02" },
-      { "coords": [[121.66012, 31.14798], [121.66171, 31.14787], [121.66314, 31.14777]], "label": "OC3_highspeed_segment1" },
-      { "coords": [[121.66314, 31.14777], [121.66601, 31.14757]], "label": "OC3_highspeed_segment2" }
-    ];
-    let polylineObjects = []; 
+    const APP_DATA = {"shapes":{"OC3TSRD":{"type":"path","coords":[[121.6766305383024,31.154411817318017],[121.66574021305969,31.151337297204602],[121.66538546865942,31.15110697518699],[121.66528602166875,31.150906985233703],[121.66525106434943,31.150638216757013],[121.6653611743543,31.14980178611587]]},"OC3QMRD":{"type":"path","coords":[[121.66547040152716,31.149252486043537],[121.66552949258327,31.14889431841289],[121.66568532622783,31.148527143358834],[121.66590297531594,31.148242762868712],[121.66614212894989,31.14802502584627],[121.66633947799353,31.14770380980542],[121.66646843820962,31.147322800286865],[121.66654633613064,31.146904958752344],[121.66669408404205,31.14623689091634],[121.66716848352104,31.143734019678913],[121.667203375232,31.143207357707656],[121.66721143173646,31.143140765495655],[121.66712005562515,31.143064799157607],[121.66708242705053,31.142995824198294],[121.66711735624429,31.142920095059235],[121.66720065942079,31.142865128088342],[121.66732427862854,31.14287914134112],[121.66738878326693,31.142978025535495],[121.66734041839653,31.14306751014501],[121.66728667406758,31.143099564406114],[121.66725442644864,31.143106394207827]]},"OC3WI":{"type":"path","coords":[[121.65757192759136,31.135741685980314],[121.65838884124229,31.136303606637437],[121.65878656191974,31.136685616698216],[121.65902573791644,31.13697546383731],[121.65908218031076,31.13713405562111],[121.65911979983147,31.13713412322349],[121.65920040705981,31.137060765382536],[121.65937506234988,31.13697379506875],[121.65958196569386,31.13691214984345],[121.65967869948035,31.13687786984936],[121.6596867576326,31.136838835947447],[121.65955508165435,31.13675820452106],[121.65910900088242,31.13652540730024],[121.65885639637852,31.13632327389152],[121.65835925177103,31.13592270824587],[121.65780568541784,31.135554201847796],[121.65778418859486,31.135549569603484]]},"OC3SAV":{"type":"path","coords":[[121.66893181750686,31.133551884252892],[121.66912798014863,31.13335930254334],[121.66946922337014,31.13270528449807],[121.66981583031924,31.13191114977519]]},"OC3IAV":{"type":"path","coords":[[121.67540585750363,31.1360609916306],[121.67540048399007,31.136077060282446],[121.67564498908746,31.135468823516018],[121.67576052889882,31.13523474958804],[121.67620386306182,31.13414221336842]]},"OC3SSDRD":{"type":"path","coords":[[121.66857732103126,31.133904862949795],[121.67101216413313,31.13472722000535],[121.67561786868166,31.13638902340578],[121.67605484445399,31.136603718257472],[121.6765278569711,31.13691241612589],[121.67692562751245,31.137294471772513],[121.67720515317482,31.13769926928741],[121.67754384332063,31.138600314746984],[121.67754384332063,31.138600314746984]]},"OC3WSDRD":{"type":"path","coords":[[121.66810269459785,31.133714776409427],[121.66773586266592,31.133627945883],[121.66731943416333,31.13360544696752],[121.66681690431598,31.133648146984235],[121.66636812567079,31.133723108182423],[121.66597578735373,31.13385789957868],[121.6648029971239,31.13445459177803],[121.66357894639968,31.135154768986805],[121.66208490839841,31.13595137454352],[121.66005080371026,31.137045624179432],[121.65901467676461,31.137658161181793],[121.65646566829525,31.13910853849913],[121.65587497650549,31.139619748253946],[121.65521136037961,31.140360484685555],[121.65478957726316,31.141138390355618],[121.65435975966481,31.142193032498668],[121.65376868836836,31.14378931557691],[121.653580660213,31.144417746071763],[121.65355653391917,31.14508606310924],[121.65370433445044,31.145898610936214]]},"OC3NSDRD":{"type":"path","coords":[[121.65386128966287,31.146275853555693],[121.65406014552931,31.146602329656496],[121.65424998103246,31.14687063371226],[121.65455631527209,31.147206481469112],[121.65491638533581,31.147489598790848],[121.65536272695381,31.147806505788765],[121.65586789618011,31.148062319565714],[121.6564106774949,31.148194182367746],[121.65735383368681,31.148358911430062],[121.6596808778084,31.14870298107764],[121.66510569670325,31.149500150031145]]},"SDLPL":{"type":"path","coords":[[121.66129348953419,31.136115215534858],[121.66007480202985,31.135426199562062],[121.65949167358715,31.135181663740358],[121.65862910904752,31.135141065011087],[121.65814811773907,31.13509196806656],[121.65763521452755,31.13493809707484],[121.65704672875333,31.134636144361085],[121.65642332173041,31.134382372009572],[121.65576499190476,31.13414232604933],[121.6550556216085,31.1339458414293],[121.65393248137937,31.133762434478584],[121.653612734872,31.133789450520016],[121.65342198490927,31.133988966902635],[121.65323396227517,31.134668567268804],[121.65299754986489,31.135015014269467],[121.65206194712967,31.137574435444733],[121.65209420707731,31.13779959048038],[121.65575921363775,31.139161071826553],[121.65675240979462,31.138447100233044],[121.6576014719846,31.137980028877468],[121.65813342722065,31.136988692888274],[121.65824088226668,31.13665352729437],[121.65791596937447,31.136348628835144],[121.65676585905261,31.13563452366201],[121.6560403440243,31.13531166755836],[121.65490642353913,31.134978920669028],[121.65379794355057,31.134831752132026],[121.65312623763698,31.134908702101537]]},"OC3BSAV":{"type":"path","coords":[[121.66921729510958,31.141954593431315],[121.66652449297263,31.141136437306088],[121.66526138580876,31.140330172213538],[121.6644390381109,31.139901421715326],[121.66381019422637,31.139643003840327],[121.66169794071442,31.138600913720875],[121.66079503165366,31.138429294632594],[121.66074643444715,31.13841877297524]]},"DT":{"type":"path","coords":[[121.66218058336712,31.139751261715418],[121.66188766897615,31.139653106890183],[121.66170224996137,31.13963094706008],[121.66112316957754,31.13974703148244],[121.66107501569265,31.139817075337444],[121.66113548540795,31.13991480334691],[121.66103203538876,31.13999270906299],[121.66088559345998,31.140103841426033],[121.66034023125337,31.140551809338344],[121.66025769384069,31.14068505980935],[121.66013947762123,31.140906493286156],[121.6601878566989,31.141031759846392],[121.66026981577566,31.141043392614787],[121.66038132565711,31.140958610896956],[121.66052105300078,31.140899145965793],[121.66068093092832,31.14079837426496],[121.66108800914401,31.14045228748262],[121.66123041924361,31.140323921964903],[121.6614104522973,31.140219742429995],[121.66172687835926,31.140041005266063],[121.66199040575931,31.139923472103096],[121.66216910289234,31.13989164324016],[121.66216910289234,31.13989164324016]]},"SDLBOHPRDMR":{"type":"path","coords":[[121.65639627596356,31.14276239457119],[121.65653868510422,31.14274197378081],[121.65664079321182,31.142766270180804],[121.65673887345699,31.142820418214715],[121.65679127531037,31.14288252459929],[121.65684770601624,31.142923966794648],[121.65696056368051,31.142959766665307],[121.65707879388926,31.14297490492618],[121.65727762936842,31.14291898501228],[121.65743749757966,31.142792943691312],[121.65753148471913,31.14255056357249],[121.6576093894247,31.14231412904992],[121.65772491943105,31.14215585316489],[121.65790494210968,31.14203444134789],[121.65816826711749,31.141945334127094],[121.6584423501013,31.1419596047075],[121.65869763010222,31.142040450844473],[121.6589233483774,31.142066120752315],[121.65914906454567,31.142057338835208],[121.65933984910163,31.142050791535887],[121.65963005846815,31.14205131450564],[121.65975904269914,31.14207451562532],[121.65988264869088,31.14204717690014],[121.65998475527199,31.14198994062169],[121.66014866372117,31.141900660584117],[121.66051525907591,31.14174546212853],[121.66078128724837,31.14172986751281],[121.66097745216034,31.14174400547058],[121.6611736217665,31.14180867438772],[121.66133217500308,31.14191921181797],[121.66151223051484,31.14208261585778],[121.66160898376641,31.1422527581482],[121.66166005984608,31.14248483092507],[121.66161335651258,31.142774314902635],[121.66152200893215,31.14298086110794],[121.66136885334846,31.143155138827133],[121.66112702190435,31.143340738835732],[121.66090848718898,31.143501045772638],[121.66074189161199,31.143610988940807],[121.6606774089007,31.143723414573028],[121.66070161344135,31.143964621268296],[121.66069894114902,31.14414376543348],[121.66064521076369,31.144299848713906],[121.66065865975861,31.144458350549865],[121.66077153307415,31.144605548973278],[121.6607876654492,31.14471811987335],[121.66077154871397,31.144793883790275],[121.66068556633871,31.144878707709037],[121.66061570972374,31.144995715541885],[121.66061571906921,31.145108256634146]]},"SDLMA":{"type":"path","coords":[[121.66145147863766,31.14185788670989],[121.6632007310663,31.140301530721572]]},"SDLTLMR":{"type":"path","coords":[[121.65703972325355,31.14065933378143],[121.6571324323756,31.140741036584174],[121.65725873753789,31.14091926722802],[121.65730980394245,31.141073247373726],[121.65742939139308,31.141245723633176],[121.65757956100488,31.141386412550226],[121.65764674806198,31.141517452301237],[121.65765079159468,31.141673644976393],[121.65766961790422,31.141878097263795],[121.65759573664396,31.142029557192338],[121.65751782652443,31.14220053284705],[121.65746947585859,31.14239452895485],[121.65747754127183,31.14244622181083]]},"SDLTSLMR":{"type":"path","coords":[[121.65687670902453,31.143034115076112],[121.6568310434936,31.143199404518395],[121.65678269193822,31.143376172945707],[121.65676927212515,31.143559893051336],[121.65676928508182,31.14371607498877],[121.65684723150564,31.143994123788367],[121.65689829070865,31.14406541419982],[121.6570568264272,31.14408406859621],[121.65745451047046,31.14412381824074]]},"SDLFLZTPMR":{"type":"path","coords":[[121.66061022379522,31.144563294342657],[121.66062635842425,31.144703426459966],[121.66055650377137,31.144843402199562],[121.66045440268431,31.144976428992592],[121.66044904324042,31.14515556625828],[121.66050817279461,31.145300368935803],[121.66058610911358,31.14540386412331],[121.66060493033108,31.145537109562717],[121.66050820922237,31.14573904721875],[121.66040342224098,31.14588651323655],[121.66032818604569,31.145936904977653],[121.6602233874386,31.145941308541737],[121.66010515152698,31.145925017315196],[121.66001513405526,31.14594782177682],[121.65992243375004,31.146021149595473],[121.65983779678709,31.14611631095907],[121.65976390541034,31.146174744078383],[121.65970882041205,31.146189573362914],[121.6596228334633,31.14620434693593],[121.65952743929535,31.146190394557415],[121.65946697451426,31.14613631248035],[121.65944950402019,31.146085752958868],[121.65944277944503,31.146004206893203],[121.65941455818314,31.14592606713352],[121.65936752900079,31.14587086080755],[121.65933528052419,31.145834054975044],[121.65927965336162,31.145776307162993],[121.65919769150918,31.14571759289198],[121.65911169975747,31.145666910021827],[121.6590821401297,31.145649631347624]]},"SDLFLMR":{"type":"path","coords":[[121.65733657404397,31.143063339144565],[121.65737555170372,31.143251746269012],[121.65738228444819,31.143434353844103],[121.65741587824394,31.143504465730828],[121.65746291155156,31.143626279284067],[121.65751934945254,31.143746961001185],[121.6576214647312,31.143837865496813],[121.65760401128651,31.143986872344204],[121.65757312339746,31.14414529543607],[121.65758791426302,31.14429126173145],[121.65767122620689,31.144453332312413],[121.65776125218032,31.144570627657586],[121.65776930229765,31.144673919388154],[121.65776259581101,31.144808268184146],[121.65779887486669,31.1448542679609],[121.6579224849889,31.14491994566006],[121.65805549693832,31.144947743769013],[121.65814955250839,31.145047820367147],[121.6581952373945,31.14510417240393],[121.65825435578002,31.14513758087801],[121.65831884599153,31.145142289561154],[121.65858083314787,31.145101416456672],[121.65867756820575,31.145099292919472],[121.65882669779427,31.14504903157516],[121.65907799608497,31.145701759157866],[121.65907934230825,31.14573391592856],[121.65907530859556,31.145697160849572],[121.65882804124804,31.14504788560616],[121.65897179476913,31.14497120216325],[121.65908867817082,31.144902509306533],[121.65934797872283,31.14483177607031],[121.65947158381124,31.144802140776857],[121.65965027478906,31.144766863127852],[121.6598433957378,31.14474748521184],[121.66004358223002,31.1446812409395],[121.66035259663897,31.14458648475315],[121.65985145686473,31.144744054629168],[121.65965932877222,31.144767823760606],[121.65963916061378,31.144590936377508],[121.65964606747157,31.144349438144605],[121.6596783034102,31.144233509112333],[121.65963476759066,31.144052705977057],[121.65959310851404,31.143949275571895],[121.65958235781014,31.14392284315322],[121.65988329004317,31.143601835836783],[121.65990075492293,31.143583493047213],[121.65996255973207,31.143590495159195],[121.66009288956833,31.143630924813703],[121.66019231730674,31.143670150295847],[121.66029174441735,31.14370018871767],[121.66046103703039,31.143721166820235],[121.66029040093571,31.14370133467863],[121.66018694300617,31.143670140562925],[121.66007542263998,31.14362515122077],[121.65995852901933,31.143590487871112],[121.65989941144849,31.143584639016233],[121.6595737887874,31.143926055815623],[121.65917338061354,31.143595745507167],[121.65950655658429,31.14327479352672],[121.65949714669136,31.143215059687076],[121.65943495443848,31.143078731383618],[121.65939194963381,31.142947735810882],[121.65937850488243,31.14283746461674],[121.65939329319394,31.142947738230422],[121.65943629876209,31.143087921034272],[121.65949273797438,31.143204011410283],[121.65950214910602,31.143278674474747],[121.65917605311881,31.143600955962082],[121.65907259176318,31.143508898205944],[121.65893957519413,31.143450091018973],[121.65881327748781,31.143401631674713],[121.65860705130349,31.143421578168194],[121.65839746496358,31.143496997556706],[121.65823758680969,31.143532312297285],[121.65808845665254,31.143559607762707],[121.65788827554648,31.14362126453326],[121.65780632657125,31.14369691283333],[121.65773512476963,31.143758799536318],[121.6576813858267,31.143783968685824]]},"SDLTCMR":{"type":"path","coords":[[121.66202787391377,31.143552765950183],[121.66197682965297,31.143706557572475],[121.66180217498537,31.143873903377255],[121.66162214399878,31.144013677984013],[121.661528101579,31.144128345215496],[121.66149854508552,31.1441604461416],[121.66091136627644,31.14381485795887],[121.6614998889698,31.144163893765793],[121.66151467627662,31.14425694030146],[121.66149891738111,31.144417934378005],[121.66132156214734,31.144411868658587],[121.66079891186781,31.144489006875805],[121.66132156205195,31.144410720271843],[121.66150026097927,31.144417936832312],[121.66153251678436,31.144531685950216],[121.66161583902382,31.144761514934928],[121.66164541635463,31.144979761335605],[121.66171581200197,31.14516963138691],[121.6617843425887,31.1452524398577],[121.66197648193797,31.145299875052704],[121.6621793682209,31.14531862097556],[121.66236074937203,31.145243161079243],[121.66248075070864,31.145194001330314],[121.66276693972816,31.145179598748634],[121.663044027311,31.145159438358835],[121.6631703244895,31.145118329678375],[121.66335444035388,31.145589503033037],[121.66317166820942,31.145119480534664],[121.66322137851262,31.14507363713692],[121.66328720548506,31.144945140184763],[121.66338662643363,31.144855750089047],[121.6636045939754,31.144697408833032],[121.6637523828808,31.14457021161021],[121.66385449215981,31.144487716884175]]},"SDLAIMR":{"type":"path","coords":[[121.66443035940397,31.14491125562101],[121.66430404089975,31.144715796283524],[121.66428791110746,31.144642269827063],[121.66428521695488,31.144559581164717],[121.66419115321659,31.144451458434514],[121.66455794553731,31.144190306916823],[121.66418980967316,31.14445260432879],[121.66404201074894,31.144467259332455],[121.66392511355329,31.144456707281293],[121.66384314420286,31.14436468456138],[121.66372086403342,31.14424961944973],[121.66353955864992,31.144118322838413],[121.66345086700474,31.143972313238255],[121.66336217252775,31.143791201911665],[121.6632869190312,31.143665887873173],[121.6632761642973,31.143596964221885],[121.66322447034074,31.143405033163518],[121.66315056086849,31.143283166370864],[121.6630081329093,31.143235819305005],[121.66282405964792,31.14326878386702],[121.66270582323602,31.143292682673447],[121.66237120080329,31.14344030689605],[121.66220325382318,31.14349282498204],[121.66206217340536,31.143474191897933],[121.66160262987218,31.143098971989442],[121.66160262987218,31.143098971989442]]},"SDLBOHMR":{"type":"path","coords":[[121.6619916449099,31.142762162700432],[121.6623517254679,31.142682434570393],[121.66277090479056,31.14233868186141],[121.6632706959825,31.141903204952563],[121.66324255818267,31.14186518553625],[121.66318612077842,31.141803066731995],[121.66319417756498,31.141743363726764],[121.66325329211121,31.141683754898963],[121.6633285363212,31.14169767485425],[121.66341723023034,31.14187239855341],[121.66346560466775,31.141918424682153],[121.66391708674618,31.142181098956275],[121.66516488668775,31.14293006678517],[121.66529119400353,31.142978535245483],[121.66550886637889,31.1429835349175],[121.66594421218869,31.14299123863001],[121.66600065072382,31.143048764406544],[121.6658771026972,31.143875380601692],[121.665770100877,31.144344130980915],[121.6657244218375,31.14440835531822],[121.66478930496355,31.145192105148414],[121.6637413395611,31.14607670316312],[121.66359892185132,31.146163715446704],[121.66299969043862,31.146474963744044],[121.66244347161064,31.14694246993444],[121.66239242213648,31.1470365411439],[121.66229899658504,31.14743447192161],[121.66235943222551,31.147544885807836],[121.66217411793775,31.148796234346264],[121.66219023228244,31.148688320807278],[121.66021313737097,31.148409197035882],[121.66010296329323,31.148397514201562],[121.65996861692082,31.148528181276617],[121.66010565044063,31.14839751906515],[121.66150299612453,31.14859298018653],[121.66209012218087,31.14825070249009],[121.66220561940132,31.14761128821158],[121.66214246366022,31.147537678234933],[121.6605785000723,31.14731663794934],[121.65954393603474,31.147158590418243],[121.65947141874784,31.147581051945902],[121.65942036856768,31.147642970624783],[121.65788333533418,31.14743351566033],[121.65635171049527,31.147191949488953],[121.65598570592968,31.147056386645843],[121.65562831437522,31.14675489269289],[121.65551371641138,31.14630032795167],[121.6554921914556,31.14594659416787],[121.65552071165605,31.144876359742565],[121.65514450061033,31.14440716409783],[121.65552071165605,31.144876359742565],[121.65549567223825,31.145958631688043],[121.65550913500309,31.146296274292173],[121.65562739876788,31.14675123096575],[121.65599040107394,31.14705877949215],[121.65636927690925,31.147192653170684],[121.6594183919722,31.147644265648722],[121.65948287719746,31.147575481103917],[121.65954733349774,31.147157598432205],[121.6586122066857,31.146997445697572],[121.65838647876816,31.14684316243644],[121.6573742568907,31.14601521196568],[121.65574091337194,31.14464309358801],[121.6555232537302,31.144449784849],[121.65515782355416,31.144380245209188],[121.65459892967452,31.14420931460495],[121.65454421288815,31.144170803879955],[121.65444747428445,31.14404890736485],[121.65448238705515,31.14384455381944],[121.65477519449519,31.143052526686873],[121.65550331799687,31.142621991530138],[121.65553287057979,31.142575013974064],[121.65529371163859,31.142326540237264],[121.65500353806465,31.142512078510425],[121.65485038566047,31.142539374658416],[121.6545145166726,31.14247907594051],[121.65485307220025,31.142534785673845],[121.65501428558778,31.14250980034933],[121.65529908628517,31.142335736899977],[121.65517547011726,31.14213110403319],[121.6552604786581,31.14190105399245],[121.65541627445664,31.141485725104424],[121.65569298964623,31.140990087418132],[121.65607286626758,31.14045802868426],[121.65636034953951,31.14016682981102],[121.65658335202946,31.139946721214205],[121.6567284461439,31.13989644535899],[121.65707776784399,31.14001190662633],[121.65769581343821,31.140336862837177],[121.65819831409914,31.14057988901325],[121.65849928634185,31.14081470738119],[121.65873039433232,31.14103561999006],[121.65887013213995,31.1411415260282],[121.65911735052859,31.14119939133683],[121.65935381142077,31.14113780155267],[121.65950428203097,31.14103930767993],[121.65963056460129,31.140890239368094],[121.65988313594401,31.14065871186616],[121.65988582270151,31.140654122982223]]},"SDLGIMR":{"type":"path","coords":[[121.66140392788553,31.142123680637994],[121.661352879247,31.142220054353384],[121.66131257987676,31.142322189673692],[121.66129780319498,31.142356615111876],[121.66142276456168,31.142440677285286],[121.66146711585813,31.14259234851976],[121.66156923219863,31.142626987366988],[121.66146845945569,31.142592350973576],[121.66142410825387,31.142441828150535],[121.6613004903844,31.14235662001427],[121.66112717047866,31.14239994367303],[121.66098341306297,31.14248121906534],[121.66090280480476,31.142566054747675],[121.66096193108635,31.142667222410886],[121.66104927070943,31.142743176411937],[121.66119572697289,31.142800863681945],[121.66130053396941,31.142881443299967],[121.6611051228691,31.143048870008215],[121.66068455310844,31.142725402602796],[121.66057169966608,31.142815921822336],[121.66056767235287,31.142857257155736],[121.66066575780994,31.142904519961025],[121.66078265673994,31.142989714431938],[121.66094659230991,31.143205912523324],[121.66071009923236,31.142942497923265],[121.66082565836324,31.14307247774299],[121.66072353641361,31.142958600020044],[121.66065636073456,31.14300096893649],[121.66057440475707,31.143031827006332],[121.6605797839488,31.1430904053746],[121.66062144578356,31.143220250543305],[121.66066578746636,31.14326167355235],[121.66072222496513,31.143345609370204],[121.66065908299362,31.143423585816432],[121.66065371152014,31.143458028029524],[121.66069939909507,31.14352701494654],[121.66067387490686,31.143574052869788],[121.6606120716949,31.143593463352055],[121.6605435422341,31.143511802686483],[121.66053815532106,31.143360204224333],[121.66050589678632,31.143208556731068],[121.66044907026019,31.143122323421142],[121.6604074166268,31.143090092569125],[121.66054847616374,31.1428928229004],[121.6604087602059,31.143090095005995],[121.66031605158851,31.143069255644694],[121.66022468351676,31.143010521470035],[121.66008762947759,31.142896581194925],[121.6601128041904,31.142863988726727],[121.66022431240748,31.14276198240635],[121.66025654984206,31.142660980867408],[121.66031834951684,31.14260252398019],[121.66053441196888,31.142400998177475],[121.66062173880059,31.14232880673251],[121.66073997457119,31.142333615224548],[121.66088239795806,31.142372920279946],[121.66106781507088,31.142395077682743],[121.6608810542752,31.142371769422372],[121.66073594362553,31.14233131107077],[121.66062308247888,31.142329957586423],[121.66051963362428,31.142413603888095],[121.66025362554241,31.14266002979205],[121.66022273168483,31.14276103376699],[121.66009014210994,31.142896902829435],[121.6600202719465,31.142843949717772],[121.65991950135185,31.142810463697664],[121.65976633394898,31.14280329653511],[121.65963197715988,31.142800757232063],[121.65948149854943,31.142806227958964],[121.65941969425548,31.14280037457633],[121.65940625293057,31.142731445904502],[121.65946669904416,31.142561331733496],[121.65953117868388,31.14242478700516],[121.65958759995414,31.14232382841134],[121.65965342774977,31.142241261348463],[121.65950428951149,31.142208836802432],[121.6593323124191,31.142192449231562],[121.65912267808896,31.14224260863509],[121.65887815954812,31.142338636323753],[121.65909715159978,31.142255195318846],[121.65933495589097,31.14219246020787],[121.65950155902682,31.142212283343785],[121.65965875855478,31.142243574013374],[121.65975145746441,31.142157610200446],[121.65980519673083,31.142116364275083],[121.65982534987182,31.1421118070132],[121.65983206771386,31.142111819148763]]},"SDLGIFC":{"type":"point","coords":[[121.66129777920365,31.142526004395183]]},"SDLGIDF":{"type":"point","coords":[[121.65981446955274,31.14257728680746]]},"SDLGIMBM":{"type":"point","coords":[[121.65872079990463,31.14240994790073]]},"SDLTLPR":{"type":"point","coords":[[121.65685539798935,31.14169624232119]]},"SDLTSLABG":{"type":"point","coords":[[121.65709669996703,31.142629270759787]]},"SDLFLPPF":{"type":"point","coords":[[121.65781823482617,31.143405723836338]]},"SDLFLVCG":{"type":"point","coords":[[121.65848465472065,31.143725018824473]]},"SDLFLAWM":{"type":"point","coords":[[121.65947621906426,31.144622629134705]]},"SDLFLSDMT":{"type":"point","coords":[[121.65965765305252,31.145260307022777]]},"SDLFLHPS":{"type":"point","coords":[[121.6586728316599,31.14531825200344]]},"SDLZTHP":{"type":"point","coords":[[121.65949518271049,31.146474987177864]]},"SDLTCSS":{"type":"point","coords":[[121.66210354517479,31.14499487543367]]},"SDLTCEC":{"type":"point","coords":[[121.66196768404717,31.143946959089977]]},"SDLAIRR":{"type":"point","coords":[[121.66318491735507,31.14295927708235]]},"SDLAICD":{"type":"point","coords":[[121.66385680043402,31.143782773278062]]},"SDLAIJEC":{"type":"point","coords":[[121.66337649966202,31.14345267800464]]},"SDLTCETF":{"type":"point","coords":[[121.66354459734342,31.145187054176347]]},"SDLFLEVP":{"type":"point","coords":[[121.65728773875428,31.144618946390974]]},"SDLAISS":{"type":"point","coords":[[121.66461378391256,31.144484657861618]]},"SDLFLTTT":{"type":"point","coords":[[121.65797291206967,31.145318929703365]]},"SDLTCPOTCBB":{"type":"point","coords":[[121.66301268760473,31.145453156389266]]},"SDLMAMPMC":{"type":"point","coords":[[121.66201687799176,31.142390103365347]]},"SDLFLVCPVK":{"type":"point","coords":[[121.65871578381429,31.14330514112781]]},"SDLAITT":{"type":"point","coords":[[121.66253495480707,31.14293720388683]]},"SDLGIWMT":{"type":"point","coords":[[121.66150320393903,31.143609427348167]]},"SDH":{"type":"point","coords":[[121.6660314349308,31.13541483075517]]},"TSH":{"type":"point","coords":[[121.65335396511351,31.13949896628222]]},"OC3LKP":{"type":"point","coords":[[121.67071318968466,31.137781805910077]]},"OC3SPSN":{"type":"point","coords":[[121.66450414098419,31.150793217008864]]},"OC3SPSW":{"type":"point","coords":[[121.65072841379128,31.14224933746298]]},"SDLBOHTS660":{"type":"point","coords":[[121.66396843619762,31.14832704080354]]}},"dashboards":{"dashboard1":[{"location":"度假区高架路至西环岛","code":"OC3WI","labelNo":2,"area":"出入口","category":"西出入口","shapeType":"path"},{"location":"星光大道","code":"OC3SAV","labelNo":3,"area":"出入口","category":"南出入口1","shapeType":"path"},{"location":"灵感街","code":"OC3IAV","labelNo":4,"area":"出入口","category":"南出入口2","shapeType":"path"},{"location":"探索路","code":"OC3TSRD","labelNo":0,"area":"出入口","category":"东入口","shapeType":"path"},{"location":"申迪北路","code":"OC3NSDRD","labelNo":7,"area":"环路","category":"东入口","shapeType":"path"},{"location":"申迪西路","code":"OC3WSDRD","labelNo":6,"area":"环路","category":"东入口","shapeType":"path"},{"location":"申迪南路","code":"OC3SSDRD","labelNo":5,"area":"环路","category":"东入口","shapeType":"path"},{"location":"奇妙路","code":"OC3QMRD","labelNo":1,"area":"环路","category":"东入口","shapeType":"path"},{"location":"西游客停车场","code":"SDLPL","labelNo":8,"area":"环路","category":"过渡区","shapeType":"path"},{"location":"迪士尼小镇","code":"DT","labelNo":10,"area":"环路","category":"过渡区","shapeType":"path"},{"location":"蓝天大道","code":"OC3BSAV","labelNo":9,"area":"环路","category":"过渡区","shapeType":"path"}],"dashboard2":[{"location":"巡游道","code":"SDLBOHPRDMR","labelNo":11,"area":"乐园内","category":"主要道路","shapeType":"path"},{"location":"米奇大街","code":"SDLMA","labelNo":12,"area":"乐园内","category":"主要道路","shapeType":"path"},{"location":"奇想花园主路","code":"SDLGIMR","labelNo":20,"area":"乐园内","category":"主要道路","shapeType":"path"},{"location":"明日世界主路","code":"SDLTLMR","labelNo":13,"area":"乐园内","category":"主要道路","shapeType":"path"},{"location":"玩具总动员主路","code":"SDLTSLMR","labelNo":14,"area":"乐园内","category":"主要道路","shapeType":"path"},{"location":"梦幻主路","code":"SDLFLMR","labelNo":16,"area":"乐园内","category":"主要道路","shapeType":"path"},{"location":"动物城主路","code":"SDLFLZTPMR","labelNo":15,"area":"乐园内","category":"主要道路","shapeType":"path"},{"location":"宝藏湾主路","code":"SDLTCMR","labelNo":17,"area":"乐园内","category":"主要道路","shapeType":"path"},{"location":"探险岛主路","code":"SDLAIMR","labelNo":18,"area":"乐园内","category":"主要道路","shapeType":"path"},{"location":"BOH主路","code":"SDLBOHMR","labelNo":19,"area":"乐园内","category":"主要道路","shapeType":"path"}],"dashboard3":[{"location":"207 木马","code":"SDLGIFC","labelNo":21,"area":"","category":"景点","shapeType":"point"},{"location":"208 小飞象","code":"SDLGIDF","labelNo":22,"area":"","category":"景点","shapeType":"point"},{"location":"漫威俱乐部","code":"SDLGIMBM","labelNo":23,"area":"","category":"景点","shapeType":"point"},{"location":"302 创","code":"SDLTLPR","labelNo":24,"area":"","category":"景点","shapeType":"point"},{"location":"354 安迪玩具盒","code":"SDLTSLABG","labelNo":25,"area":"","category":"景点","shapeType":"point"},{"location":"403 小飞侠","code":"SDLFLPPF","labelNo":26,"area":"","category":"景点","shapeType":"point"},{"location":"晶彩奇航","code":"SDLFLVCG","labelNo":27,"area":"","category":"景点","shapeType":"point"},{"location":"410 爱丽丝","code":"SDLFLAWM","labelNo":28,"area":"","category":"景点","shapeType":"point"},{"location":"407 小矮人","code":"SDLFLSDMT","labelNo":29,"area":"","category":"景点","shapeType":"point"},{"location":"404 蜂蜜罐","code":"SDLFLHPS","labelNo":30,"area":"","category":"景点","shapeType":"point"},{"location":"451疯狂动物城","code":"SDLZTHP","labelNo":31,"area":"","category":"景点","shapeType":"point"},{"location":"501 船奇戏水滩","code":"SDLTCSS","labelNo":32,"area":"","category":"景点","shapeType":"point"},{"location":"504 独木舟","code":"SDLTCEC","labelNo":33,"area":"","category":"景点","shapeType":"point"},{"location":"702 漂流","code":"SDLAIRR","labelNo":34,"area":"","category":"景点","shapeType":"point"},{"location":"703 探索营","code":"SDLAICD","labelNo":35,"area":"","category":"景点","shapeType":"point"},{"location":"小勇者营地","code":"SDLAIJEC","labelNo":36,"area":"","category":"景点","shapeType":"point"},{"location":"502 凡迭戈","code":"SDLTCETF","labelNo":37,"area":"","category":"剧院","shapeType":"point"},{"location":"405 林间剧场","code":"SDLFLEVP","labelNo":38,"area":"","category":"剧院","shapeType":"point"},{"location":"故事舞台","code":"SDLAISS","labelNo":39,"area":"","category":"剧院","shapeType":"point"},{"location":"406 老藤树","code":"SDLFLTTT","labelNo":40,"area":"","category":"餐厅","shapeType":"point"},{"location":"巴博萨餐厅","code":"SDLTCPOTCBB","labelNo":41,"area":"","category":"餐厅","shapeType":"point"},{"location":"米奇好伙伴美味集市","code":"SDLMAMPMC","labelNo":42,"area":"","category":"餐厅","shapeType":"point"},{"location":"皮诺丘乡村厨房","code":"SDLFLVCPVK","labelNo":43,"area":"","category":"餐厅","shapeType":"point"},{"location":"达菲好友欢庆堂","code":"SDLAITT","labelNo":44,"area":"","category":"餐厅","shapeType":"point"},{"location":"漫月","code":"SDLGIWMT","labelNo":45,"area":"","category":"餐厅","shapeType":"point"},{"location":"H1","code":"SDH","labelNo":46,"area":"OC2","category":"餐厅","shapeType":"point"},{"location":"H2","code":"TSH","labelNo":47,"area":"OC2","category":"餐厅","shapeType":"point"},{"location":"WSP","code":"OC3LKP","labelNo":48,"area":"OC2","category":"餐厅","shapeType":"point"},{"location":"北雨水泵站","code":"OC3SPSN","labelNo":49,"area":"OC2","category":"附属设施","shapeType":"point"},{"location":"西雨水泵站","code":"OC3SPSW","labelNo":50,"area":"OC2","category":"附属设施","shapeType":"point"},{"location":"35KV变电站","code":"SDLBOHTS660","labelNo":51,"area":"OC2","category":"附属设施","shapeType":"point"}]},"counts":{"paths":21,"points":31},"coordinateSystem":"GCJ-02 (converted from CBI Studio WGS84)"};
+    const TITLES = {
+      dashboard1:"表盘 1 · 度假区道路恢复",
+      dashboard2:"表盘 2 · 乐园主要道路恢复",
+      dashboard3:"表盘 3 · 乐园、酒店及周边重要设施",
+      dashboard4:"表盘 4 · 全部树木风险工单热力"
+    };
+    const NOTES = {
+      dashboard1:"Est. Recover Hrs 显示为 0，仅代表园艺高风险已排除、区域可进入或道路基本畅通，并不保证现场景观恢复常态。",
+      dashboard2:"Est. Recover Hrs 显示为 0，仅代表高风险已排除、区域可进入或道路基本畅通，并不保证现场 show 恢复常态。",
+      dashboard3:"点位颜色表示严重程度，大小表示树木损失数量。没有关联工单的点位以灰色展示。",
+      dashboard4:"热力高亮表示该区域树木风险工单较多；工单数量不能直接反映对运营的实际影响，且可能存在重复上报。"
+    };
+    let map, activeDashboard="dashboard1", incidents=[], overlays=[], heatmap=null;
+    let tempLngLat=null, isSelecting=false, activeInfoWindow=null;
 
-    const ALL_ZONES = ["米奇大街", "奇想花园", "探险岛", "宝藏湾", "明日世界", "梦幻世界", "玩具总动员", "疯狂动物城", "后勤及公共区域"];
-
-    // 🚀 高德地图 API 异步加载完成后的回调初始化函数
-    function onAMapLoad() {
-      map = new AMap.Map('map-container', {
-        zoom: 15,
-        center: [121.6578, 31.1436],
-        viewMode: '3D',
-        layers: [new AMap.TileLayer(), new AMap.TileLayer.Satellite()]
+    window.onAMapLoad = function() {
+      map = new AMap.Map("map-container", {
+        zoom:14.6, center:[121.658,31.1437], viewMode:"3D",
+        layers:[new AMap.TileLayer(),new AMap.TileLayer.Satellite()]
       });
+      const savedName=localStorage.getItem("reporter_name");
+      if(savedName) document.getElementById("reporterInput").value=savedName;
+      loadIncidents();
+    };
 
-      // 初始化读取缓存数据与地图渲染
-      const savedName = localStorage.getItem("reporter_name");
-      if (savedName) {
-        document.getElementById("reporterInput").value = savedName;
-      }
-      initRoadsOnMap(); 
-      loadAndRenderData();
+    function clean(value) { return String(value ?? "").replace(/[&<>"']/g, c=>({"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#39;"}[c])); }
+    function parseLocationZone(value) {
+      const text=String(value||"");
+      const parts=text.split("|");
+      return parts[0]==="LOC" && parts.length>=5
+        ? {dashboard:parts[1],code:parts[2],location:parts[3],area:parts.slice(4).join("|")}
+        : null;
+    }
+    function incidentCode(item) {
+      const direct=String(item.location_code || item.locationCode || "").trim();
+      return direct || parseLocationZone(item.zone)?.code || "";
+    }
+    function incidentZoneLabel(item) {
+      const parsed=parseLocationZone(item.zone);
+      return parsed ? parsed.location : (item.zone||"未分类");
+    }
+    function activeItems() { return APP_DATA.dashboards[activeDashboard] || []; }
+    function linkedIncidents(code) { return incidents.filter(i=>i.status!=="resolved" && incidentCode(i)===code); }
+    function treesFor(code) { return linkedIncidents(code).reduce((s,i)=>s+(Number(i.count)||0),0); }
+    function severityRank(value) { return ({high:3,medium:2,low:1}[value]||0); }
+    function maxSeverity(code) {
+      return linkedIncidents(code).reduce((best,i)=>severityRank(i.severity)>severityRank(best)?i.severity:best,"");
+    }
+    function severityColor(value) { return ({high:"#e74c3c",medium:"#f39c12",low:"#27ae60"}[value]||"#98a2b3"); }
+    function lineColor(code) {
+      const level=maxSeverity(code);
+      return level ? severityColor(level) : (activeDashboard==="dashboard1" ? "#1677ff" : "#8e44ad");
     }
 
-    // 🛣️ 将路网线要素在地图上渲染
-    function initRoadsOnMap() {
-      MY_ROADS_DATA.forEach(road => {
-        let isSDL = road.label.startsWith("SDL");
-        let polyline = new AMap.Polyline({
-          path: road.coords,
-          strokeColor: isSDL ? "#1890ff" : "#722ed1",
-          strokeOpacity: 0.85,
-          strokeWeight: 5,
-          strokeStyle: "solid",
-          map: map
-        });
-        polyline.setExtData(road);
-        
-        polyline.on('click', (e) => {
-          let info = new AMap.InfoWindow({
-            content: `<div style="padding:6px;font-size:12px;"><b>🛣️ 空间资产详情</b><br>编号: ${road.label}<br>节点数: ${road.coords.length} 个</div>`,
-            offset: new AMap.Pixel(0, 0)
+    async function loadIncidents() {
+      try {
+        const {data,error}=await db.from("incidents").select("*").order("id",{ascending:false});
+        if(error) throw error;
+        incidents=data||[];
+      } catch(error) {
+        console.error("工单读取失败",error);
+        incidents=[];
+      }
+      renderDashboard();
+    }
+
+    function clearOverlays() {
+      if(activeInfoWindow) { activeInfoWindow.close(); activeInfoWindow=null; }
+      overlays.forEach(o=>map.remove(o)); overlays=[];
+      if(heatmap) { heatmap.hide(); }
+    }
+
+    function switchDashboard(name) {
+      activeDashboard=name;
+      document.querySelectorAll(".tab").forEach(btn=>btn.classList.toggle("active",btn.dataset.tab===name));
+      document.getElementById("searchInput").value="";
+      renderDashboard();
+    }
+
+    function renderDashboard() {
+      if(!map) return;
+      clearOverlays();
+      document.getElementById("panelTitle").textContent=TITLES[activeDashboard];
+      document.getElementById("dashboardNote").textContent=NOTES[activeDashboard];
+      if(activeDashboard==="dashboard4") renderHeatmap();
+      else renderGeometryLayer();
+      renderKpis();
+      renderTable();
+      renderLegend();
+    }
+
+    function renderGeometryLayer() {
+      activeItems().forEach(item=>{
+        const shape=APP_DATA.shapes[item.code];
+        if(!shape) return;
+        let overlay;
+        if(shape.type==="path") {
+          overlay=new AMap.Polyline({
+            path:shape.coords, strokeColor:lineColor(item.code), strokeOpacity:.9,
+            strokeWeight:treesFor(item.code)>0?8:5, lineJoin:"round", lineCap:"round",
+            zIndex:60, extData:{code:item.code}
           });
-          info.open(map, e.lnglat);
-        });
-
-        polylineObjects.push(polyline);
-      });
-    }
-
-    function getMarkerIcon(severity, isLarge = false) {
-      let color = '#faad14';
-      if (severity === 'high') color = '#f5222d';
-      if (severity === 'low') color = '#52c41a';
-
-      const size = isLarge ? 42 : 30;
-      const svg = `<svg viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg" width="${size}" height="${size}"><circle cx="50" cy="50" r="35" fill="${color}" stroke="#ffffff" stroke-width="8" /><circle cx="50" cy="50" r="10" fill="#ffffff" /></svg>`;
-      return new AMap.Icon({
-        size: new AMap.Size(size, size),
-        image: 'data:image/svg+xml;utf8,' + encodeURIComponent(svg),
-        imageSize: new AMap.Size(size, size)
-      });
-    }
-
-    // 🔄 从 Supabase 云端读取并渲染最新数据
-    async function loadAndRenderData() {
-      removeHighlight();
-      markers.forEach(m => map.remove(m));
-      markers = [];
-
-      try {
-        const { data: cloudData, error } = await db
-          .from('incidents')
-          .select('*')
-          .order('id', { ascending: false });
-
-        if (error) throw error;
-
-        rawCloudData = cloudData; 
-
-        let zoneStats = {};
-        ALL_ZONES.forEach(zone => { zoneStats[zone] = { todo: 0, done: 0 }; });
-        let totalTodoCount = 0; 
-        let totalDoneCount = 0;
-
-        cloudData.forEach(item => {
-          const id = item.id;
-          const zone = item.zone || "后勤及公共区域";
-          const count = parseInt(item.count || 0);
-          const status = item.status || 'todo';
-          const severity = item.severity;
-          const time = item.time;
-          const photo = item.photo;
-          const lng = item.lng;
-          const lat = item.lat;
-          const reporter = item.reporter || "未知上报人";
-
-          if (status === 'resolved') {
-            zoneStats[zone].done += count;
-            totalDoneCount += count;
-          } else {
-            zoneStats[zone].todo += count;
-            totalTodoCount += count;
-
-            if (lng && lat) {
-              let marker = new AMap.Marker({
-                position: [lng, lat],
-                icon: getMarkerIcon(severity),
-                offset: new AMap.Pixel(-15, -15),
-                map: map
-              });
-
-              marker.setExtData({ id: id, severity: severity, lng: lng, lat: lat });
-
-              marker.setLabel({
-                offset: new AMap.Pixel(15, -10),
-                content: `<div class="custom-marker-label">[${zone}] ${count}棵</div>`,
-                direction: 'right'
-              });
-
-              let imageHtml = photo ? `<img class="info-window-img" src="${photo}" onclick="window.open('${photo}')">` : '<p style="color:#999;font-size:12px;margin-top:5px;">(无照片)</p>';
-              let severityText = { high: '🔴 紧急', medium: '🟡 中度', low: '🟢 轻微' }[severity] || '🟡 中度';
-
-              marker.on('click', () => {
-                showInfoWindow(marker, zone, count, severityText, reporter, time, imageHtml, id);
-              });
-              markers.push(marker);
-            }
-          }
-        });
-
-        const tbody = document.getElementById('statsTableBody');
-        tbody.innerHTML = '';
-        ALL_ZONES.forEach(zone => {
-          const stats = zoneStats[zone];
-          tbody.innerHTML += `<tr><td>${zone}</td><td style="${stats.todo > 0 ? 'color: red; font-weight: bold;' : 'color:#999;'}">${stats.todo}</td><td style="${stats.done > 0 ? 'color: green;' : 'color:#999;'}">${stats.done}</td></tr>`;
-        });
-        
-        document.getElementById('totalTodo').innerText = totalTodoCount;
-        document.getElementById('totalDone').innerText = totalDoneCount;
-
-        renderCurrentTab();
-
-      } catch (error) {
-        console.error("加载云端数据失败:", error);
-        alert("云端数据加载失败，请检查网络或配置：" + error.message);
-      }
-    }
-
-    function showInfoWindow(marker, zone, count, severityText, reporter, time, imageHtml, id) {
-      highlightMarkerOnMap(marker);
-
-      let infoWindow = new AMap.InfoWindow({
-        content: `
-          <div style="padding:10px; font-size:13px; line-height:1.6; max-width:240px;">
-            <b>🌲 倒树详情</b><br>
-            区域: <b>${zone}</b><br>
-            数量: <b>${count}</b> 棵<br>
-            程度: ${severityText}<br>
-            上报人: <b>${reporter}</b><br>
-            时间: ${time}<br>
-            ${imageHtml}
-            <button onclick="resolveIncident('${id}')" style="margin-top:8px; width:100%; padding:5px; background:#52c41a; color:white; border:none; border-radius:4px; cursor:pointer;">已处理(销项)</button>
-          </div>
-        `,
-        offset: new AMap.Pixel(0, -15)
-      });
-      infoWindow.open(map, marker.getPosition());
-      
-      infoWindow.on('close', () => {
-        removeHighlight();
-      });
-    }
-
-    function highlightMarkerOnMap(marker) {
-      removeHighlight(); 
-      activeHighlightMarker = marker;
-      const extData = marker.getExtData();
-      
-      marker.setIcon(getMarkerIcon(extData.severity, true));
-      marker.setOffset(new AMap.Pixel(-21, -21));
-      marker.setzIndex(999);
-
-      highlightRing = new AMap.Marker({
-        position: marker.getPosition(),
-        content: '<div class="highlight-marker-ring"></div>',
-        offset: new AMap.Pixel(-15, -15),
-        zIndex: 998,
-        map: map
-      });
-
-      map.setZoomAndCenter(17, marker.getPosition());
-    }
-
-    function removeHighlight() {
-      if (activeHighlightMarker) {
-        const extData = activeHighlightMarker.getExtData();
-        activeHighlightMarker.setIcon(getMarkerIcon(extData.severity, false));
-        activeHighlightMarker.setOffset(new AMap.Pixel(-15, -15));
-        activeHighlightMarker.setzIndex(100);
-        activeHighlightMarker = null;
-      }
-      if (highlightRing) {
-        map.remove(highlightRing);
-        highlightRing = null;
-      }
-    }
-
-    // 📊 Tab 切换扩展逻辑
-    window.switchTab = function(tabName) {
-      const tabs = document.querySelectorAll('.tab-btn');
-      tabs.forEach(btn => btn.classList.remove('active'));
-
-      document.getElementById('zoneSection').style.display = 'none';
-      document.getElementById('severitySection').style.display = 'none';
-      document.getElementById('reporterSection').style.display = 'none';
-      document.getElementById('assetSection').style.display = 'none';
-
-      if (tabName === 'zone') {
-        tabs[0].classList.add('active');
-        document.getElementById('zoneSection').style.display = 'block';
-      } else if (tabName === 'severityTab') {
-        tabs[1].classList.add('active');
-        document.getElementById('severitySection').style.display = 'block';
-        renderSeverityTab();
-      } else if (tabName === 'reporterTab') {
-        tabs[2].classList.add('active');
-        document.getElementById('reporterSection').style.display = 'block';
-        renderReporterTab();
-      } else if (tabName === 'assetTab') {
-        tabs[3].classList.add('active');
-        document.getElementById('assetSection').style.display = 'block';
-        renderAssetTab(); 
-      }
-    }
-
-    function renderCurrentTab() {
-      const activeTab = document.querySelector('.tab-btn.active');
-      if (!activeTab) return;
-      if (activeTab.innerText.includes('严重程度')) renderSeverityTab();
-      if (activeTab.innerText.includes('上报贡献')) renderReporterTab();
-      if (activeTab.innerText.includes('空间资产')) renderAssetTab();
-    }
-
-    function renderSeverityTab() {
-      const tbody = document.getElementById('severityTableBody');
-      tbody.innerHTML = '';
-      const todoItems = rawCloudData.filter(item => item.status !== 'resolved' && item.lng && item.lat);
-
-      if (todoItems.length === 0) {
-        tbody.innerHTML = '<tr><td colspan="4" style="text-align:center;color:#999;">暂无待处理点位</td></tr>';
-        return;
-      }
-
-      const severityOrder = { high: 1, medium: 2, low: 3 };
-      todoItems.sort((a, b) => severityOrder[a.severity] - severityOrder[b.severity]);
-
-      todoItems.forEach(item => {
-        const levelText = { high: '🔴 紧急', medium: '🟡 中度', low: '🟢 轻微' }[item.severity] || '🟡 中度';
-        const zone = item.zone || "公共区";
-        const count = item.count || 1;
-
-        const row = document.createElement('tr');
-        row.className = 'clickable-row';
-        row.innerHTML = `
-          <td><b>${levelText}</b></td>
-          <td>${zone}</td>
-          <td><b>${count}</b>棵</td>
-          <td><span style="color:#1890ff; font-weight:bold;">定位 📍</span></td>
-        `;
-
-        row.addEventListener('click', () => {
-          const targetMarker = markers.find(m => m.getExtData().id === item.id);
-          if (targetMarker) targetMarker.emit('click');
-        });
-        tbody.appendChild(row);
-      });
-    }
-
-    function renderReporterTab() {
-      const tbody = document.getElementById('reporterTableBody');
-      tbody.innerHTML = '';
-      let reporterStats = {};
-
-      rawCloudData.forEach(item => {
-        const name = item.reporter ? item.reporter.trim() : "匿名";
-        const count = parseInt(item.count || 0);
-        if (!reporterStats[name]) { reporterStats[name] = { totalTrees: 0, reportsCount: 0 }; }
-        reporterStats[name].totalTrees += count;
-        reporterStats[name].reportsCount += 1;
-      });
-
-      const sortedReporters = Object.keys(reporterStats).map(name => ({
-        name: name,
-        ...reporterStats[name]
-      })).sort((a, b) => b.totalTrees - a.totalTrees);
-
-      if (sortedReporters.length === 0) {
-        tbody.innerHTML = '<tr><td colspan="3" style="text-align:center;color:#999;">无上报记录</td></tr>';
-        return;
-      }
-
-      sortedReporters.forEach((item, index) => {
-        const medal = index === 0 ? '🥇 ' : index === 1 ? '🥈 ' : index === 2 ? '🥉 ' : '';
-        tbody.innerHTML += `<tr><td>${medal}<b>${item.name}</b></td><td style="color:#1890ff; font-weight:bold;">${item.totalTrees} 棵</td><td>${item.reportsCount} 次</td></tr>`;
-      });
-    }
-
-    function renderAssetTab() {
-      const tbody = document.getElementById('assetTableBody');
-      tbody.innerHTML = '';
-      
-      let totalCount = MY_ROADS_DATA.length;
-      let totalLengthKm = 0;
-
-      document.getElementById('assetTotalCount').innerText = totalCount + ' 条';
-
-      MY_ROADS_DATA.forEach((road) => {
-        let pathArr = road.coords.map(c => new AMap.LngLat(c[0], c[1]));
-        let lengthMeters = AMap.GeometryUtil.distanceOfLine(pathArr); 
-        totalLengthKm += lengthMeters / 1000;
-
-        let typeText = road.label.startsWith("SDL") ? "核心区" : "外围干道";
-        
-        let row = document.createElement('tr');
-        row.className = 'clickable-row';
-        row.innerHTML = `
-          <td style="font-family:monospace;">${road.label}</td>
-          <td><span style="color:${road.label.startsWith("SDL") ? '#1890ff':'#722ed1'}">${typeText}</span></td>
-          <td>${road.coords.length}</td>
-          <td><span style="color:#1890ff; font-weight:bold;">追踪 👁️</span></td>
-        `;
-
-        row.addEventListener('click', () => {
-          let startCoord = road.coords[0];
-          map.setZoomAndCenter(16, [startCoord[0], startCoord[1]]);
-          
-          let targetPoly = polylineObjects.find(p => p.getExtData().label === road.label);
-          if (targetPoly) {
-            targetPoly.setOptions({ strokeWeight: 9, strokeColor: '#ff4d4f' });
-            setTimeout(() => {
-              targetPoly.setOptions({ strokeWeight: 5, strokeColor: road.label.startsWith("SDL") ? "#1890ff" : "#722ed1" });
-            }, 1000);
-          }
-        });
-
-        tbody.appendChild(row);
-      });
-
-      document.getElementById('assetTotalLen').innerText = totalLengthKm.toFixed(2) + ' km';
-    }
-
-    function startReport() {
-      isSelecting = true;
-      alert('请在地图卫星图上点击倒树的确切位置。');
-      map.on('click', onMapClick);
-    }
-
-    function onMapClick(e) {
-      if (!isSelecting) return;
-      tempLngLat = e.lnglat;
-      document.getElementById('geoInput').value = `${tempLngLat.getLng().toFixed(5)}, ${tempLngLat.getLat().toFixed(5)}`;
-      document.getElementById('reportModal').style.display = 'flex';
-      isSelecting = false;
-      map.off('click', onMapClick);
-    }
-
-    function fileToBase64(file) {
-      return new Promise((resolve, reject) => {
-        const reader = new FileReader();
-        reader.onload = function(e) {
-          const img = new Image();
-          img.onload = function() {
-            const canvas = document.createElement('canvas');
-            const ctx = canvas.getContext('2d');
-            const maxW = 500; 
-            const scale = Math.min(maxW / img.width, 1);
-            canvas.width = img.width * scale; canvas.height = img.height * scale;
-            ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
-            resolve(canvas.toDataURL('image/jpeg', 0.6));
-          };
-          img.src = e.target.result;
-        };
-        reader.onerror = reject;
-        reader.readAsDataURL(file);
-      });
-    }
-
-    async function submitReport() {
-      const reporterName = document.getElementById('reporterInput').value.trim();
-      if (!reporterName) { alert("请输入上报人姓名！"); return; }
-      
-      localStorage.setItem("reporter_name", reporterName);
-      const submitBtn = document.getElementById('submitBtn');
-      const photoInput = document.getElementById('photoInput');
-      submitBtn.disabled = true; submitBtn.innerText = '正在上传云端...';
-
-      let photoBase64 = '';
-      try {
-        if (photoInput.files.length > 0) { photoBase64 = await fileToBase64(photoInput.files[0]); }
-
-        const zone = document.getElementById('areaZone').value;
-        const count = parseInt(document.getElementById('treeCount').value) || 1;
-        const severity = document.getElementById('severity').value;
-        const now = new Date();
-        const timeStr = `${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')} ${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
-
-        const { error } = await db
-          .from('incidents')
-          .insert([
-            { 
-              lng: tempLngLat.getLng(), 
-              lat: tempLngLat.getLat(), 
-              zone: zone, 
-              count: count, 
-              severity: severity, 
-              time: timeStr, 
-              photo: photoBase64, 
-              status: 'todo',
-              reporter: reporterName
-            }
-          ]);
-
-        if (error) throw error;
-        await loadAndRenderData(); 
-        closeModal();
-        alert('上传成功！所有人已同步此险情。');
-      } catch (error) {
-        alert('保存失败：' + error.message);
-      } finally {
-        submitBtn.disabled = false; submitBtn.innerText = '提交';
-      }
-    }
-
-    window.resolveIncident = async function(id) {
-      if(confirm("确定已处理完毕，要进行销项吗？")) {
-        try {
-          const { error } = await db
-            .from('incidents')
-            .update({ status: 'resolved' })
-            .eq('id', id);
-
-          if (error) throw error;
-          map.clearInfoWindow(); 
-          await loadAndRenderData();
-          alert('销项成功，云端已实时同步！');
-        } catch (error) {
-          alert('操作失败：' + error.message);
+        } else {
+          const trees=treesFor(item.code), color=severityColor(maxSeverity(item.code));
+          const size=Math.min(34,14+Math.sqrt(Math.max(trees,1))*3);
+          overlay=new AMap.CircleMarker({
+            center:shape.coords[0], radius:size/2, strokeColor:"#fff", strokeWeight:2,
+            fillColor:color, fillOpacity:.92, zIndex:80, extData:{code:item.code}
+          });
         }
-      }
+        overlay.setMap(map);
+        overlay.on("click",e=>showLocationInfo(item,e.lnglat || overlay.getPath?.()[0] || shape.coords[0]));
+        overlays.push(overlay);
+      });
+      fitCurrentLayer(false);
     }
 
-    window.toggleStats = function() {
-      const content = document.getElementById('statsContent');
-      const summaryTop = document.getElementById('statsSummaryTop');
-      const tabs = document.getElementById('statsTabs');
-      const icon = document.getElementById('toggleIcon');
-      
-      if (content.style.display === 'none') {
-        content.style.display = 'block';
-        summaryTop.style.display = 'flex';
-        tabs.style.display = 'flex';
-        icon.innerText = '▼';
+    function renderHeatmap() {
+      const openItems=incidents.filter(i=>i.status!=="resolved" && Number(i.lng) && Number(i.lat));
+      map.plugin(["AMap.HeatMap"],()=>{
+        if(!heatmap) {
+          heatmap=new AMap.HeatMap(map,{radius:34,opacity:[0,.86],gradient:{.2:"#3e9cff",.45:"#34c759",.7:"#ffd60a",1:"#ff3b30"}});
+        }
+        heatmap.setDataSet({data:openItems.map(i=>({lng:Number(i.lng),lat:Number(i.lat),count:Math.max(1,Number(i.count)||1)})),max:Math.max(1,...openItems.map(i=>Number(i.count)||1))});
+        heatmap.show();
+      });
+      openItems.forEach(item=>{
+        const marker=new AMap.CircleMarker({
+          center:[Number(item.lng),Number(item.lat)],radius:5,fillColor:severityColor(item.severity),
+          fillOpacity:.85,strokeColor:"#fff",strokeWeight:1,zIndex:90
+        });
+        marker.setMap(map);
+        marker.on("click",e=>showIncidentInfo(item,e.lnglat));
+        overlays.push(marker);
+      });
+      if(openItems.length) map.setFitView(overlays,false,[90,40,90,40],16);
+    }
+
+    function renderKpis() {
+      const items=activeItems();
+      const isHeat=activeDashboard==="dashboard4";
+      const open=incidents.filter(i=>i.status!=="resolved");
+      const treeTotal=isHeat
+        ? open.reduce((s,i)=>s+(Number(i.count)||0),0)
+        : items.reduce((s,item)=>s+treesFor(item.code),0);
+      const linked=isHeat ? open.length : items.filter(item=>linkedIncidents(item.code).length).length;
+      document.getElementById("kpi1Label").textContent=isHeat?"待处理工单":(activeDashboard==="dashboard3"?"设施点位":"道路数");
+      document.getElementById("kpi1").textContent=isHeat?open.length:items.length;
+      document.getElementById("kpiTrees").textContent=treeTotal;
+      document.getElementById("kpi3Label").textContent=isHeat?"涉及区域":"有工单位置";
+      document.getElementById("kpi3").textContent=isHeat?new Set(open.map(i=>i.zone||"未分类")).size:linked;
+    }
+
+    function renderTable() {
+      const head=document.getElementById("tableHead"), body=document.getElementById("dashboardRows");
+      const query=document.getElementById("searchInput").value.trim().toLowerCase();
+      body.innerHTML="";
+      if(activeDashboard==="dashboard4") {
+        head.innerHTML="<th>区域 / 上报人</th><th>数量</th><th>程度</th><th>时间</th>";
+        const rows=incidents.filter(i=>i.status!=="resolved" && [incidentZoneLabel(i),incidentCode(i),i.reporter,i.time].join(" ").toLowerCase().includes(query));
+        rows.forEach(item=>{
+          const mappedCode=incidentCode(item);
+          const tr=document.createElement("tr"); tr.className="data-row";
+          tr.innerHTML=`<td>${clean(incidentZoneLabel(item))}${mappedCode?`<br><code>${clean(mappedCode)}</code>`:""}<br><small>${clean(item.reporter||"匿名")}</small></td><td><b>${Number(item.count)||0}</b> 棵</td><td><span class="dot" style="background:${severityColor(item.severity)}"></span>${clean(({high:"紧急",medium:"中度",low:"轻微"}[item.severity]||"未定"))}</td><td>${clean(item.time||"—")}</td>`;
+          tr.onclick=()=>{ if(Number(item.lng)&&Number(item.lat)){map.setZoomAndCenter(18,[Number(item.lng),Number(item.lat)]);showIncidentInfo(item,[Number(item.lng),Number(item.lat)]);} };
+          body.appendChild(tr);
+        });
+        if(!rows.length) body.innerHTML='<tr><td colspan="4" class="empty">暂无匹配的待处理工单</td></tr>';
+        return;
+      }
+      head.innerHTML="<th>Location</th><th>Location Code</th><th>类型</th><th>损失</th>";
+      const rows=activeItems().filter(i=>(i.location+" "+i.code+" "+i.category).toLowerCase().includes(query));
+      rows.forEach(item=>{
+        const shape=APP_DATA.shapes[item.code], trees=treesFor(item.code);
+        const tr=document.createElement("tr"); tr.className="data-row";
+        tr.innerHTML=`<td>${clean(item.location)}${item.category?`<br><small>${clean(item.category)}</small>`:""}</td><td><code>${clean(item.code)}</code></td><td><span class="badge">${shape.type==="path"?"线":"点"}</span></td><td><b>${trees||"—"}</b></td>`;
+        tr.onclick=()=>focusLocation(item.code);
+        body.appendChild(tr);
+      });
+      if(!rows.length) body.innerHTML='<tr><td colspan="4" class="empty">没有匹配的位置</td></tr>';
+    }
+
+    function renderLegend() {
+      document.getElementById("legend").innerHTML=activeDashboard==="dashboard4"
+        ? '<b>热力密度</b><br><span class="dot" style="background:#3e9cff"></span>较少　<span class="dot" style="background:#ffd60a"></span>较多　<span class="dot" style="background:#ff3b30"></span>集中'
+        : '<b>工单严重程度</b><br><span class="dot" style="background:#e74c3c"></span>紧急　<span class="dot" style="background:#f39c12"></span>中度　<span class="dot" style="background:#27ae60"></span>轻微　<span class="dot" style="background:#98a2b3"></span>无关联工单';
+    }
+
+    function focusLocation(code) {
+      const target=overlays.find(o=>o.getExtData?.()?.code===code);
+      const item=activeItems().find(i=>i.code===code), shape=APP_DATA.shapes[code];
+      if(!target||!shape) return;
+      if(shape.type==="path") {
+        map.setFitView([target],false,[100,80,100,420],17);
+        target.setOptions({strokeWeight:10,strokeColor:"#ff3b30"});
+        setTimeout(()=>target.setOptions({strokeWeight:treesFor(code)>0?8:5,strokeColor:lineColor(code)}),1200);
+        showLocationInfo(item,shape.coords[Math.floor(shape.coords.length/2)]);
       } else {
-        content.style.display = 'none';
-        summaryTop.style.display = 'none'; 
-        tabs.style.display = 'none';
-        icon.innerText = '▲';
+        map.setZoomAndCenter(18,shape.coords[0]);
+        showLocationInfo(item,shape.coords[0]);
       }
     }
 
-    function closeModal() { document.getElementById('reportModal').style.display = 'none'; document.getElementById('photoInput').value = ''; }
+    function showLocationInfo(item,position) {
+      const linked=linkedIncidents(item.code), trees=treesFor(item.code);
+      activeInfoWindow=new AMap.InfoWindow({content:`<div style="padding:8px;line-height:1.65;font-size:12px"><b>${clean(item.location)}</b><br>Location Code: <code>${clean(item.code)}</code><br>几何类型: ${item.shapeType==="path"?"线段":"点位"}<br>关联待处理工单: ${linked.length}<br>总损失树木: ${trees||0}</div>`,offset:new AMap.Pixel(0,-8)});
+      activeInfoWindow.open(map,position);
+    }
+
+    function showIncidentInfo(item,position) {
+      const severity=({high:"🔴 紧急",medium:"🟡 中度",low:"🟢 轻微"}[item.severity]||"未定");
+      const photo=item.photo?`<img src="${clean(item.photo)}" style="width:100%;max-height:130px;object-fit:cover;margin-top:6px;border-radius:5px">`:"";
+      const code=incidentCode(item);
+      activeInfoWindow=new AMap.InfoWindow({content:`<div style="padding:8px;line-height:1.6;font-size:12px;max-width:230px"><b>树木风险工单</b><br>位置: ${clean(incidentZoneLabel(item))}${code?`<br>Location Code: <code>${clean(code)}</code>`:""}<br>数量: <b>${Number(item.count)||0}</b> 棵<br>程度: ${severity}<br>上报人: ${clean(item.reporter||"匿名")}<br>时间: ${clean(item.time||"—")}${photo}<button onclick="resolveIncident('${clean(item.id)}')" style="width:100%;margin-top:7px;border:0;border-radius:5px;padding:6px;background:#27ae60;color:#fff">已处理（销项）</button></div>`,offset:new AMap.Pixel(0,-8)});
+      activeInfoWindow.open(map,position);
+    }
+
+    function fitCurrentLayer(force=true) {
+      if(!map||!overlays.length) return;
+      map.setFitView(overlays,false,[90,40,90,activeDashboard==="dashboard4"?40:420],16);
+    }
+    function togglePanel() {
+      const panel=document.getElementById("dashboardPanel");
+      panel.classList.toggle("collapsed");
+      document.getElementById("collapseIcon").textContent=panel.classList.contains("collapsed")?"▲":"▼";
+    }
+    function startReport() {
+      const reportDashboard=["dashboard1","dashboard2","dashboard3"].includes(activeDashboard)?activeDashboard:"dashboard1";
+      document.getElementById("reportDashboard").value=reportDashboard;
+      populateReportLocations();
+      document.getElementById("nearestHint").textContent="";
+      tempLngLat=null;
+      isSelecting=true; alert("请在地图上点击倒树的确切位置。");
+      map.on("click",onMapClick);
+    }
+    function populateReportLocations(preferredCode="") {
+      const dashboard=document.getElementById("reportDashboard").value;
+      const select=document.getElementById("reportLocation");
+      select.innerHTML="";
+      (APP_DATA.dashboards[dashboard]||[]).forEach(item=>{
+        const option=document.createElement("option");
+        option.value=item.code;
+        option.textContent=`${item.location} (${item.code})`;
+        option.dataset.location=item.location;
+        option.dataset.area=item.area||item.category||"";
+        select.appendChild(option);
+      });
+      if(preferredCode && [...select.options].some(o=>o.value===preferredCode)) select.value=preferredCode;
+    }
+    function handleReportDashboardChange() {
+      const dashboard=document.getElementById("reportDashboard").value;
+      const nearest=tempLngLat ? nearestLocation(dashboard,tempLngLat) : null;
+      populateReportLocations(nearest?.item.code || "");
+      document.getElementById("nearestHint").textContent=nearest
+        ? `已按新分类重新匹配：${nearest.item.location}，距离约 ${Math.round(nearest.distance)} 米；如不正确可手动更改。`
+        : "";
+    }
+    function pointSegmentDistance(point,a,b) {
+      const lat0=point[1]*Math.PI/180, mx=111320*Math.cos(lat0), my=110540;
+      const px=(point[0]-a[0])*mx, py=(point[1]-a[1])*my;
+      const bx=(b[0]-a[0])*mx, by=(b[1]-a[1])*my;
+      const denom=bx*bx+by*by;
+      const t=denom?Math.max(0,Math.min(1,(px*bx+py*by)/denom)):0;
+      return Math.hypot(px-t*bx,py-t*by);
+    }
+    function nearestLocation(dashboard,lnglat) {
+      const point=[lnglat.getLng(),lnglat.getLat()];
+      let best=null;
+      (APP_DATA.dashboards[dashboard]||[]).forEach(item=>{
+        const shape=APP_DATA.shapes[item.code];
+        let distance=Infinity;
+        if(shape.type==="point") {
+          distance=pointSegmentDistance(point,shape.coords[0],shape.coords[0]);
+        } else {
+          for(let i=1;i<shape.coords.length;i++) distance=Math.min(distance,pointSegmentDistance(point,shape.coords[i-1],shape.coords[i]));
+        }
+        if(!best||distance<best.distance) best={item,distance};
+      });
+      return best;
+    }
+    function onMapClick(e) {
+      if(!isSelecting)return;
+      tempLngLat=e.lnglat; isSelecting=false; map.off("click",onMapClick);
+      document.getElementById("geoInput").value=`${tempLngLat.getLng().toFixed(6)}, ${tempLngLat.getLat().toFixed(6)}`;
+      const dashboard=document.getElementById("reportDashboard").value;
+      const nearest=nearestLocation(dashboard,tempLngLat);
+      if(nearest) {
+        populateReportLocations(nearest.item.code);
+        document.getElementById("nearestHint").textContent=`已自动匹配最近位置：${nearest.item.location}，距离约 ${Math.round(nearest.distance)} 米；如不正确可手动更改。`;
+      }
+      document.getElementById("reportModal").style.display="flex";
+    }
+    function closeModal() {
+      document.getElementById("reportModal").style.display="none";
+      document.getElementById("photoInput").value="";
+    }
+    function fileToBase64(file) {
+      return new Promise((resolve,reject)=>{
+        const reader=new FileReader();
+        reader.onload=e=>{
+          const image=new Image();
+          image.onload=()=>{
+            const canvas=document.createElement("canvas"),scale=Math.min(500/image.width,1);
+            canvas.width=Math.round(image.width*scale);canvas.height=Math.round(image.height*scale);
+            canvas.getContext("2d").drawImage(image,0,0,canvas.width,canvas.height);
+            resolve(canvas.toDataURL("image/jpeg",.6));
+          };
+          image.onerror=reject; image.src=e.target.result;
+        };
+        reader.onerror=reject;reader.readAsDataURL(file);
+      });
+    }
+    async function submitReport() {
+      const reporter=document.getElementById("reporterInput").value.trim();
+      if(!reporter||!tempLngLat){alert("请填写上报人并选择位置。");return;}
+      localStorage.setItem("reporter_name",reporter);
+      const button=document.getElementById("submitBtn");button.disabled=true;button.textContent="上传中…";
+      try {
+        const file=document.getElementById("photoInput").files[0];
+        const photo=file?await fileToBase64(file):"";
+        const now=new Date(),time=`${String(now.getMonth()+1).padStart(2,"0")}-${String(now.getDate()).padStart(2,"0")} ${String(now.getHours()).padStart(2,"0")}:${String(now.getMinutes()).padStart(2,"0")}`;
+        const dashboard=document.getElementById("reportDashboard").value;
+        const locationSelect=document.getElementById("reportLocation");
+        const selected=locationSelect.options[locationSelect.selectedIndex];
+        if(!selected) throw new Error("请选择对应 Location");
+        const locationCode=selected.value,locationName=selected.dataset.location,area=selected.dataset.area||"";
+        // Encode the mapping in the existing zone column so this works with the current
+        // Supabase schema without requiring a database migration.
+        const mappedZone=["LOC",dashboard,locationCode,locationName,area].join("|");
+        const {error}=await db.from("incidents").insert([{
+          lng:tempLngLat.getLng(),lat:tempLngLat.getLat(),zone:mappedZone,
+          count:Number(document.getElementById("treeCount").value)||1,severity:document.getElementById("severity").value,
+          time,photo,status:"todo",reporter
+        }]);
+        if(error)throw error;
+        closeModal();await loadIncidents();switchDashboard(dashboard);alert(`上传成功，已关联到 ${locationName} (${locationCode})`);
+      } catch(error) { alert("保存失败："+error.message); }
+      finally { button.disabled=false;button.textContent="提交"; }
+    }
+    async function resolveIncident(id) {
+      if(!confirm("确定该工单已处理完毕吗？"))return;
+      try {
+        const {error}=await db.from("incidents").update({status:"resolved"}).eq("id",id);
+        if(error)throw error;map.clearInfoWindow();await loadIncidents();
+      } catch(error) { alert("销项失败："+error.message); }
+    }
   </script>
+  <script src="https://webapi.amap.com/maps?v=2.0&key=ecc7bff9b574a80ad34e4d51bab69aca&callback=onAMapLoad"></script>
 </body>
 </html>
