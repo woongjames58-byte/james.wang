@@ -92,6 +92,18 @@
     .gallery-card img { display:block; width:100%; height:135px; object-fit:cover; cursor:zoom-in; background:#eef1f4; }
     .gallery-caption { padding:7px 8px; font-size:10px; line-height:1.5; color:#475467; }
     .gallery-caption b { color:#1d2939; font-size:11px; }
+    .capture-badge {
+      display:inline-flex; align-items:center; justify-content:center;
+      min-width:20px; height:20px; margin-right:5px; padding:0 5px;
+      border-radius:10px; background:#ff3b30; color:#fff; font-weight:800; font-size:10px;
+    }
+    .photo-capture-pin {
+      width:27px; height:27px; border-radius:50% 50% 50% 0;
+      transform:rotate(-45deg); display:flex; align-items:center; justify-content:center;
+      background:#ff3b30; color:#fff; border:2px solid #fff;
+      box-shadow:0 2px 7px rgba(0,0,0,.42); cursor:pointer;
+    }
+    .photo-capture-pin span { transform:rotate(45deg); font-size:10px; font-weight:800; }
     .gallery-empty { padding:28px 12px; color:#98a2b3; text-align:center; font-size:11px; line-height:1.6; }
     .gallery-panel.collapsed .gallery-toolbar,.gallery-panel.collapsed .gallery-list { display:none; }
     .image-lightbox {
@@ -238,7 +250,7 @@
       dashboard3:"点位颜色表示严重程度，大小表示树木损失数量。没有关联工单的点位以灰色展示。",
       dashboard4:"热力高亮表示该区域树木风险工单较多；工单数量不能直接反映对运营的实际影响，且可能存在重复上报。"
     };
-    let map, activeDashboard="dashboard1", incidents=[], overlays=[], heatmap=null;
+    let map, activeDashboard="dashboard1", incidents=[], overlays=[], photoPointOverlays=[], heatmap=null;
     let tempLngLat=null, isSelecting=false, activeInfoWindow=null;
     let galleryLocationCode="", galleryIncidentId="";
 
@@ -297,6 +309,7 @@
     function clearOverlays() {
       if(activeInfoWindow) { activeInfoWindow.close(); activeInfoWindow=null; }
       overlays.forEach(o=>map.remove(o)); overlays=[];
+      clearPhotoCapturePoints();
       if(heatmap) { heatmap.hide(); }
     }
 
@@ -361,23 +374,55 @@
       document.getElementById("galleryCount").textContent=photos.length;
       document.getElementById("galleryClear").style.display=(galleryLocationCode||galleryIncidentId)?"block":"none";
       list.innerHTML="";
+      renderPhotoCapturePoints((galleryLocationCode||galleryIncidentId)?photos:[]);
       if(!photos.length) {
         list.innerHTML=`<div class="gallery-empty">${galleryLocationCode||galleryIncidentId?"该位置暂时没有上传图片":"当前表盘暂时没有已上传图片"}</div>`;
         return;
       }
-      photos.forEach(item=>{
+      photos.forEach((item,index)=>{
         const code=incidentCode(item),location=incidentZoneLabel(item);
+        const captureLabel=capturePointLabel(index);
         const card=document.createElement("article");card.className="gallery-card";
         card.innerHTML=`
           <img src="${clean(item.photo)}" alt="${clean(location)} · ${clean(code||"未关联 Location Code")}" loading="lazy" onclick="openImageLightbox(this.src,this.alt)">
           <div class="gallery-caption">
-            <b>${clean(location)}</b>${code?` · <code>${clean(code)}</code>`:""}<br>
+            <span class="capture-badge">${captureLabel}</span><b>拍摄点 ${captureLabel}</b>　${clean(location)}${code?` · <code>${clean(code)}</code>`:""}<br>
             <span class="dot" style="background:${severityColor(item.severity)}"></span>${severityLabel(item.severity)}
            　损失 <b>${Number(item.count)||0}</b> 棵<br>
             上报人：${clean(item.reporter||"匿名")}　时间：${clean(item.time||"—")}
             ${item.status==="resolved"?"　<span class='badge'>已销项</span>":""}
           </div>`;
         list.appendChild(card);
+      });
+    }
+
+    function capturePointLabel(index) {
+      const letter=String.fromCharCode(65+(index%26));
+      return index<26 ? letter : `${letter}${Math.floor(index/26)+1}`;
+    }
+
+    function clearPhotoCapturePoints() {
+      if(!map) return;
+      photoPointOverlays.forEach(marker=>map.remove(marker));
+      photoPointOverlays=[];
+    }
+
+    function renderPhotoCapturePoints(photos) {
+      clearPhotoCapturePoints();
+      photos.forEach((item,index)=>{
+        if(!Number(item.lng)||!Number(item.lat)) return;
+        const label=capturePointLabel(index);
+        const location=incidentZoneLabel(item);
+        const marker=new AMap.Marker({
+          position:[Number(item.lng),Number(item.lat)],
+          content:`<div class="photo-capture-pin"><span>${label}</span></div>`,
+          offset:new AMap.Pixel(-14,-27),
+          zIndex:160,
+          extData:{role:"photoCapture",incidentId:item.id}
+        });
+        marker.setMap(map);
+        marker.on("click",()=>openImageLightbox(item.photo,`拍摄点 ${label} · ${location}`));
+        photoPointOverlays.push(marker);
       });
     }
 
