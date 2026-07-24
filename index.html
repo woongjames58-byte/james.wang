@@ -94,6 +94,22 @@
     .gallery-caption b { color:#1d2939; font-size:11px; }
     .gallery-empty { padding:28px 12px; color:#98a2b3; text-align:center; font-size:11px; line-height:1.6; }
     .gallery-panel.collapsed .gallery-toolbar,.gallery-panel.collapsed .gallery-list { display:none; }
+    .image-lightbox {
+      display:none; position:fixed; inset:0; z-index:2200; padding:24px;
+      background:rgba(0,0,0,.9); align-items:center; justify-content:center;
+    }
+    .image-lightbox.open { display:flex; }
+    .lightbox-image { max-width:94vw; max-height:88vh; object-fit:contain; border-radius:6px; box-shadow:0 8px 40px rgba(0,0,0,.45); }
+    .lightbox-close {
+      position:absolute; top:16px; right:18px; width:40px; height:40px;
+      border:0; border-radius:50%; background:rgba(255,255,255,.18); color:#fff;
+      font-size:26px; line-height:40px; cursor:pointer;
+    }
+    .lightbox-caption {
+      position:absolute; left:50%; bottom:14px; transform:translateX(-50%);
+      max-width:90vw; padding:6px 10px; border-radius:5px;
+      background:rgba(0,0,0,.55); color:#fff; font-size:11px; text-align:center;
+    }
     .modal { display:none; position:fixed; inset:0; z-index:1200; background:rgba(0,0,0,.5); align-items:center; justify-content:center; }
     .modal-content { width:min(360px,88vw); max-height:90vh; overflow:auto; background:#fff; border-radius:13px; padding:18px; }
     .modal-title { text-align:center; font-weight:700; margin-bottom:13px; }
@@ -200,6 +216,12 @@
       <div class="form-group"><label>现场照片</label><input id="photoInput" type="file" accept="image/*"></div>
       <div class="modal-btns"><button class="cancel" onclick="closeModal()">取消</button><button class="submit" id="submitBtn" onclick="submitReport()">提交</button></div>
     </div>
+  </div>
+
+  <div class="image-lightbox" id="imageLightbox" onclick="if(event.target===this) closeImageLightbox()">
+    <button class="lightbox-close" onclick="closeImageLightbox()" aria-label="关闭大图">×</button>
+    <img class="lightbox-image" id="lightboxImage" alt="现场图片大图">
+    <div class="lightbox-caption" id="lightboxCaption"></div>
   </div>
 
   <script>
@@ -347,7 +369,7 @@
         const code=incidentCode(item),location=incidentZoneLabel(item);
         const card=document.createElement("article");card.className="gallery-card";
         card.innerHTML=`
-          <img src="${clean(item.photo)}" alt="${clean(location)}现场图片" loading="lazy" onclick="window.open(this.src,'_blank')">
+          <img src="${clean(item.photo)}" alt="${clean(location)} · ${clean(code||"未关联 Location Code")}" loading="lazy" onclick="openImageLightbox(this.src,this.alt)">
           <div class="gallery-caption">
             <b>${clean(location)}</b>${code?` · <code>${clean(code)}</code>`:""}<br>
             <span class="dot" style="background:${severityColor(item.severity)}"></span>${severityLabel(item.severity)}
@@ -382,6 +404,22 @@
       panel.classList.toggle("collapsed");
       document.getElementById("galleryIcon").textContent=panel.classList.contains("collapsed")?"▲":"▼";
     }
+
+    function openImageLightbox(src,caption="") {
+      document.getElementById("lightboxImage").src=src;
+      document.getElementById("lightboxCaption").textContent=caption;
+      document.getElementById("imageLightbox").classList.add("open");
+    }
+
+    function closeImageLightbox() {
+      const lightbox=document.getElementById("imageLightbox");
+      lightbox.classList.remove("open");
+      document.getElementById("lightboxImage").removeAttribute("src");
+    }
+
+    document.addEventListener("keydown",event=>{
+      if(event.key==="Escape") closeImageLightbox();
+    });
 
     function renderGeometryLayer() {
       activeItems().forEach(item=>{
