@@ -89,17 +89,26 @@
     .gallery-filter { min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; font-size:10px; color:#475467; }
     .gallery-clear { display:none; flex:0 0 auto; border:0; border-radius:5px; padding:4px 7px; background:#edf4ff; color:var(--blue); font-size:10px; cursor:pointer; }
     .gallery-list {
-      flex:1 1 auto; min-height:0; overflow-x:hidden; overflow-y:scroll;
-      padding:8px; display:grid; align-content:start; gap:8px;
+      flex:none; width:100%; height:calc(100% - 84px); min-height:0;
+      overflow-x:hidden; overflow-y:auto !important;
+      padding:8px; display:block;
       overscroll-behavior:contain; -webkit-overflow-scrolling:touch;
       scrollbar-width:thin; scrollbar-color:#98a2b3 transparent;
     }
     .gallery-list::-webkit-scrollbar { width:7px; }
     .gallery-list::-webkit-scrollbar-thumb { background:#98a2b3; border-radius:8px; }
     .gallery-list::-webkit-scrollbar-track { background:transparent; }
-    .gallery-card { overflow:hidden; border:1px solid #e4e7ec; border-radius:8px; background:#fff; }
+    .gallery-card {
+      display:block; width:100%; min-height:218px; margin:0 0 10px;
+      overflow:hidden; border:1px solid #e4e7ec; border-radius:8px; background:#fff;
+    }
+    .gallery-card:last-child { margin-bottom:0; }
     .gallery-card img { display:block; width:100%; height:135px; object-fit:cover; cursor:zoom-in; background:#eef1f4; }
-    .gallery-caption { padding:7px 8px; font-size:10px; line-height:1.5; color:#475467; }
+    .gallery-caption {
+      display:block; min-height:82px; height:auto; overflow:visible;
+      padding:7px 8px 9px; font-size:10px; line-height:1.55;
+      color:#475467; white-space:normal;
+    }
     .gallery-caption b { color:#1d2939; font-size:11px; }
     .capture-badge {
       display:inline-flex; align-items:center; justify-content:center;
@@ -151,6 +160,7 @@
       .legend { display:none; }
       .gallery-panel { right:8px; top:calc(52vh + 76px); width:calc(100% - 16px); height:28vh; max-height:28vh; }
       .gallery-card img { height:105px; }
+      .gallery-card { min-height:188px; }
     }
   </style>
 </head>
@@ -206,7 +216,7 @@
       <div class="gallery-filter" id="galleryFilter">当前表盘全部位置</div>
       <button class="gallery-clear" id="galleryClear" onclick="event.stopPropagation();clearGallerySelection()">显示全部</button>
     </div>
-    <div class="gallery-list" id="galleryList"></div>
+    <div class="gallery-list" id="galleryList" onwheel="event.stopPropagation()" ontouchmove="event.stopPropagation()"></div>
   </aside>
 
   <div class="legend" id="legend"></div>
