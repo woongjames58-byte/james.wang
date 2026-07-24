@@ -711,21 +711,67 @@
       document.getElementById("reportModal").style.display="none";
       document.getElementById("photoInput").value="";
     }
-    function fileToBase64(file) {
+    function loadImageFile(file) {
       return new Promise((resolve,reject)=>{
         const reader=new FileReader();
         reader.onload=e=>{
           const image=new Image();
-          image.onload=()=>{
-            const canvas=document.createElement("canvas"),scale=Math.min(500/image.width,1);
-            canvas.width=Math.round(image.width*scale);canvas.height=Math.round(image.height*scale);
-            canvas.getContext("2d").drawImage(image,0,0,canvas.width,canvas.height);
-            resolve(canvas.toDataURL("image/jpeg",.6));
-          };
+          image.onload=()=>resolve(image);
           image.onerror=reject; image.src=e.target.result;
         };
         reader.onerror=reject;reader.readAsDataURL(file);
       });
+    }
+
+    function canvasToJpegBlob(canvas,quality) {
+      return new Promise((resolve,reject)=>{
+        canvas.toBlob(blob=>blob?resolve(blob):reject(new Error("图片压缩失败")),"image/jpeg",quality);
+      });
+    }
+
+    async function optimizePhoto(file) {
+      const image=await loadImageFile(file);
+      let maxDimension=1600;
+      const render=async(quality)=>{
+        const scale=Math.min(maxDimension/image.width,maxDimension/image.height,1);
+        const canvas=document.createElement("canvas");
+        canvas.width=Math.max(1,Math.round(image.width*scale));
+        canvas.height=Math.max(1,Math.round(image.height*scale));
+        const context=canvas.getContext("2d",{alpha:false});
+        context.fillStyle="#fff";
+        context.fillRect(0,0,canvas.width,canvas.height);
+        context.drawImage(image,0,0,canvas.width,canvas.height);
+        return canvasToJpegBlob(canvas,quality);
+      };
+      let blob=await render(.82);
+      if(blob.size>2.8*1024*1024) blob=await render(.72);
+      if(blob.size>2.8*1024*1024) {
+        maxDimension=1280;
+        blob=await render(.72);
+      }
+      if(blob.size>3*1024*1024) throw new Error("图片压缩后仍超过 3 MB，请选择较小的图片");
+      return blob;
+    }
+
+    function safePathPart(value) {
+      return String(value||"unknown").replace(/[^a-zA-Z0-9_-]/g,"_").slice(0,80);
+    }
+
+    async function uploadIncidentPhoto(file,dashboard,locationCode) {
+      const blob=await optimizePhoto(file);
+      const unique=globalThis.crypto?.randomUUID
+        ? crypto.randomUUID()
+        : `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+      const path=`${safePathPart(dashboard)}/${safePathPart(locationCode)}/${Date.now()}-${unique}.jpg`;
+      const {error}=await db.storage.from("incident-photos").upload(path,blob,{
+        contentType:"image/jpeg",
+        cacheControl:"31536000",
+        upsert:false
+      });
+      if(error) throw new Error(`图片上传失败：${error.message}`);
+      const {data}=db.storage.from("incident-photos").getPublicUrl(path);
+      if(!data?.publicUrl) throw new Error("图片已上传，但未能取得公开地址");
+      return data.publicUrl;
     }
     async function submitReport() {
       const reporter=document.getElementById("reporterInput").value.trim();
@@ -733,14 +779,15 @@
       localStorage.setItem("reporter_name",reporter);
       const button=document.getElementById("submitBtn");button.disabled=true;button.textContent="上传中…";
       try {
-        const file=document.getElementById("photoInput").files[0];
-        const photo=file?await fileToBase64(file):"";
         const now=new Date(),time=`${String(now.getMonth()+1).padStart(2,"0")}-${String(now.getDate()).padStart(2,"0")} ${String(now.getHours()).padStart(2,"0")}:${String(now.getMinutes()).padStart(2,"0")}`;
         const dashboard=document.getElementById("reportDashboard").value;
         const locationSelect=document.getElementById("reportLocation");
         const selected=locationSelect.options[locationSelect.selectedIndex];
         if(!selected) throw new Error("请选择对应 Location");
         const locationCode=selected.value,locationName=selected.dataset.location,area=selected.dataset.area||"";
+        const file=document.getElementById("photoInput").files[0];
+        button.textContent=file?"正在优化并上传图片…":"正在保存工单…";
+        const photo=file?await uploadIncidentPhoto(file,dashboard,locationCode):"";
         // Encode the mapping in the existing zone column so this works with the current
         // Supabase schema without requiring a database migration.
         const mappedZone=["LOC",dashboard,locationCode,locationName,area].join("|");
