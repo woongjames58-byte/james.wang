@@ -34,6 +34,7 @@
       background:var(--panel); border-radius:12px; box-shadow:0 6px 24px rgba(0,0,0,.2);
       display:flex; flex-direction:column; overflow:hidden;
     }
+    .dashboard-body { display:flex; flex-direction:column; flex:1; min-height:0; overflow:hidden; }
     .dashboard-head {
       padding:11px 13px; background:var(--navy); color:#fff; display:flex;
       justify-content:space-between; align-items:center; cursor:pointer;
@@ -47,10 +48,11 @@
     .kpi span { display:block; font-size:10px; color:var(--muted); }
     .kpi strong { display:block; margin-top:3px; font-size:16px; color:var(--navy); }
     .dashboard-note { margin:4px 10px 7px; padding:7px 9px; background:#fff8e6; color:#7a5200; border-radius:7px; font-size:10px; line-height:1.45; }
-    .toolbar { display:flex; gap:6px; padding:0 10px 8px; }
+    .toolbar { display:flex; gap:6px; padding:0 10px 8px; flex-wrap:wrap; }
     .search { flex:1; min-width:0; padding:7px 9px; border:1px solid #d0d5dd; border-radius:7px; font-size:12px; }
+    .sort-select { width:148px; padding:7px 8px; border:1px solid #d0d5dd; border-radius:7px; background:#fff; color:#344054; font-size:11px; }
     .small-btn { border:0; border-radius:7px; background:#edf4ff; color:var(--blue); padding:6px 9px; cursor:pointer; font-size:11px; }
-    .table-wrap { overflow:auto; flex:1; min-height:80px; }
+    .table-wrap { overflow-x:auto; overflow-y:auto; flex:1 1 auto; min-height:80px; overscroll-behavior:contain; -webkit-overflow-scrolling:touch; }
     table { width:100%; border-collapse:collapse; font-size:11px; }
     th { position:sticky; top:0; z-index:1; background:#f8fafc; color:#475467; text-align:left; padding:7px 8px; border-bottom:1px solid #e4e7ec; }
     td { padding:7px 8px; border-bottom:1px solid #eef1f4; vertical-align:middle; }
@@ -116,6 +118,12 @@
       <div class="dashboard-note" id="dashboardNote"></div>
       <div class="toolbar">
         <input id="searchInput" class="search" placeholder="搜索 Location 或 Location Code" oninput="renderTable()">
+        <select id="sortSelect" class="sort-select" onchange="renderTable()">
+          <option value="severityLoss">紧急程度 → 损失数量</option>
+          <option value="loss">损失数量（高到低）</option>
+          <option value="severity">紧急程度（高到低）</option>
+          <option value="location">Location 名称</option>
+        </select>
         <button class="small-btn" onclick="fitCurrentLayer()">显示全部</button>
       </div>
       <div class="table-wrap" id="tableWrap">
@@ -205,6 +213,7 @@
     function linkedIncidents(code) { return incidents.filter(i=>i.status!=="resolved" && incidentCode(i)===code); }
     function treesFor(code) { return linkedIncidents(code).reduce((s,i)=>s+(Number(i.count)||0),0); }
     function severityRank(value) { return ({high:3,medium:2,low:1}[value]||0); }
+    function severityLabel(value) { return ({high:"紧急",medium:"中度",low:"轻微"}[value]||"无工单"); }
     function maxSeverity(code) {
       return linkedIncidents(code).reduce((best,i)=>severityRank(i.severity)>severityRank(best)?i.severity:best,"");
     }
@@ -260,19 +269,39 @@
           overlay=new AMap.Polyline({
             path:shape.coords, strokeColor:lineColor(item.code), strokeOpacity:.9,
             strokeWeight:treesFor(item.code)>0?8:5, lineJoin:"round", lineCap:"round",
-            zIndex:60, extData:{code:item.code}
+            zIndex:60, extData:{code:item.code,role:"geometry"}
           });
         } else {
           const trees=treesFor(item.code), color=severityColor(maxSeverity(item.code));
           const size=Math.min(34,14+Math.sqrt(Math.max(trees,1))*3);
           overlay=new AMap.CircleMarker({
             center:shape.coords[0], radius:size/2, strokeColor:"#fff", strokeWeight:2,
-            fillColor:color, fillOpacity:.92, zIndex:80, extData:{code:item.code}
+            fillColor:color, fillOpacity:.92, zIndex:80, extData:{code:item.code,role:"geometry"}
           });
         }
         overlay.setMap(map);
         overlay.on("click",e=>showLocationInfo(item,e.lnglat || overlay.getPath?.()[0] || shape.coords[0]));
         overlays.push(overlay);
+
+        const labelPosition=shape.type==="path"
+          ? shape.coords[Math.floor(shape.coords.length/2)]
+          : shape.coords[0];
+        const label=new AMap.Text({
+          text:item.location,
+          position:labelPosition,
+          anchor:shape.type==="path"?"center":"bottom-left",
+          offset:shape.type==="path"?new AMap.Pixel(0,-9):new AMap.Pixel(7,-5),
+          zIndex:95,
+          extData:{code:item.code,role:"label"},
+          style:{
+            "font-size":"9px","line-height":"1.2","padding":"2px 4px",
+            "border":"1px solid rgba(255,255,255,.48)","border-radius":"3px",
+            "background-color":"rgba(18,40,62,.76)","color":"#fff",
+            "box-shadow":"0 1px 3px rgba(0,0,0,.22)","white-space":"nowrap"
+          }
+        });
+        label.setMap(map);
+        overlays.push(label);
       });
       fitCurrentLayer(false);
     }
@@ -319,7 +348,14 @@
       body.innerHTML="";
       if(activeDashboard==="dashboard4") {
         head.innerHTML="<th>区域 / 上报人</th><th>数量</th><th>程度</th><th>时间</th>";
+        const sortMode=document.getElementById("sortSelect").value;
         const rows=incidents.filter(i=>i.status!=="resolved" && [incidentZoneLabel(i),incidentCode(i),i.reporter,i.time].join(" ").toLowerCase().includes(query));
+        rows.sort((a,b)=>{
+          if(sortMode==="loss") return (Number(b.count)||0)-(Number(a.count)||0);
+          if(sortMode==="severity") return severityRank(b.severity)-severityRank(a.severity);
+          if(sortMode==="location") return incidentZoneLabel(a).localeCompare(incidentZoneLabel(b),"zh-CN");
+          return severityRank(b.severity)-severityRank(a.severity) || (Number(b.count)||0)-(Number(a.count)||0);
+        });
         rows.forEach(item=>{
           const mappedCode=incidentCode(item);
           const tr=document.createElement("tr"); tr.className="data-row";
@@ -330,16 +366,25 @@
         if(!rows.length) body.innerHTML='<tr><td colspan="4" class="empty">暂无匹配的待处理工单</td></tr>';
         return;
       }
-      head.innerHTML="<th>Location</th><th>Location Code</th><th>类型</th><th>损失</th>";
+      head.innerHTML="<th>Location</th><th>Location Code</th><th>类型</th><th>紧急程度</th><th>损失</th>";
+      const sortMode=document.getElementById("sortSelect").value;
       const rows=activeItems().filter(i=>(i.location+" "+i.code+" "+i.category).toLowerCase().includes(query));
+      rows.sort((a,b)=>{
+        const severityDiff=severityRank(maxSeverity(b.code))-severityRank(maxSeverity(a.code));
+        const lossDiff=treesFor(b.code)-treesFor(a.code);
+        if(sortMode==="loss") return lossDiff || severityDiff;
+        if(sortMode==="severity") return severityDiff || lossDiff;
+        if(sortMode==="location") return a.location.localeCompare(b.location,"zh-CN");
+        return severityDiff || lossDiff || a.location.localeCompare(b.location,"zh-CN");
+      });
       rows.forEach(item=>{
-        const shape=APP_DATA.shapes[item.code], trees=treesFor(item.code);
+        const shape=APP_DATA.shapes[item.code], trees=treesFor(item.code), level=maxSeverity(item.code);
         const tr=document.createElement("tr"); tr.className="data-row";
-        tr.innerHTML=`<td>${clean(item.location)}${item.category?`<br><small>${clean(item.category)}</small>`:""}</td><td><code>${clean(item.code)}</code></td><td><span class="badge">${shape.type==="path"?"线":"点"}</span></td><td><b>${trees||"—"}</b></td>`;
+        tr.innerHTML=`<td>${clean(item.location)}${item.category?`<br><small>${clean(item.category)}</small>`:""}</td><td><code>${clean(item.code)}</code></td><td><span class="badge">${shape.type==="path"?"线":"点"}</span></td><td><span class="dot" style="background:${severityColor(level)}"></span>${severityLabel(level)}</td><td><b>${trees||"—"}</b></td>`;
         tr.onclick=()=>focusLocation(item.code);
         body.appendChild(tr);
       });
-      if(!rows.length) body.innerHTML='<tr><td colspan="4" class="empty">没有匹配的位置</td></tr>';
+      if(!rows.length) body.innerHTML='<tr><td colspan="5" class="empty">没有匹配的位置</td></tr>';
     }
 
     function renderLegend() {
@@ -349,7 +394,7 @@
     }
 
     function focusLocation(code) {
-      const target=overlays.find(o=>o.getExtData?.()?.code===code);
+      const target=overlays.find(o=>o.getExtData?.()?.code===code && o.getExtData?.()?.role==="geometry");
       const item=activeItems().find(i=>i.code===code), shape=APP_DATA.shapes[code];
       if(!target||!shape) return;
       if(shape.type==="path") {
@@ -379,7 +424,8 @@
 
     function fitCurrentLayer(force=true) {
       if(!map||!overlays.length) return;
-      map.setFitView(overlays,false,[90,40,90,activeDashboard==="dashboard4"?40:420],16);
+      const targets=overlays.filter(o=>o.getExtData?.()?.role!=="label");
+      map.setFitView(targets,false,[90,40,90,activeDashboard==="dashboard4"?40:420],16);
     }
     function togglePanel() {
       const panel=document.getElementById("dashboardPanel");
